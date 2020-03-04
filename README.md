@@ -1,3 +1,3 @@
-# Goshawk
+# Sesh
 
-Goshawk is a library for using a session table + session cookie to manage sesssions in a go server.
+Sesh is a library for using a session table + session cookie to manage sesssions in a go server.
