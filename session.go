@@ -16,10 +16,11 @@ var (
 
 // log messages
 var (
-	SessionExpired         = "Auth failed because of an expired session"
-	SessionDoesNotExist    = "Auth failed because of an invalid session"
-	SessionUnexpectedError = "An unexpected error occured while checking the session."
-	SessionCreationFailed  = "An unexpected error occured creating a session"
+	SessionExpired                = "Auth failed because of an expired session"
+	SessionDoesNotExist           = "Auth failed because of an invalid session"
+	SessionUnexpectedError        = "An unexpected error occured while checking the session."
+	SessionCreationFailed         = "An unexpected error occured creating a session"
+	RequestIsMissingSessionCookie = "Unauthorized: Request is missing a session cookie"
 
 	SessionCreated         = "New Session Created"
 	SessionDestroyed       = "Session Was Destroyed"
@@ -38,11 +39,11 @@ type LogService interface {
 type FmtLogger bool
 
 func (l FmtLogger) Info(message string, fields LogFields) {
-	fmt.Printf("INFO: %s %v", message, fields)
+	fmt.Printf("INFO: %s %v\n", message, fields)
 }
 
 func (l FmtLogger) WarnError(message string, err error, fields LogFields) {
-	fmt.Printf("WARN: %s %v %v", message, err, fields)
+	fmt.Printf("WARN: %s %v %v\n", message, err, fields)
 }
 
 // end logging stuff

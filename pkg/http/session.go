@@ -2,9 +2,11 @@ package http
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 
-	"github.com/us-dod-saber/culper/api"
+	"github.com/trussworks/sesh"
 )
 
 // SessionCookieName is the name of the cookie that is used to store the session
@@ -12,12 +14,12 @@ const SessionCookieName = "eapp-session-key"
 
 // SessionMiddleware is the session handler.
 type SessionMiddleware struct {
-	log     api.LogService
-	session api.SessionService
+	log     sesh.LogService
+	session sesh.SessionService
 }
 
 // NewSessionMiddleware returns a configured SessionMiddleware
-func NewSessionMiddleware(log api.LogService, session api.SessionService) *SessionMiddleware {
+func NewSessionMiddleware(log sesh.LogService, session sesh.SessionService) *SessionMiddleware {
 	return &SessionMiddleware{
 		log,
 		session,
@@ -30,32 +32,30 @@ func (service SessionMiddleware) Middleware(next http.Handler) http.Handler {
 
 		sessionCookie, cookieErr := r.Cookie(SessionCookieName)
 		if cookieErr != nil {
-			service.log.WarnError(api.RequestIsMissingSessionCookie, cookieErr, api.LogFields{})
-			RespondWithStructuredError(w, api.RequestIsMissingSessionCookie, http.StatusUnauthorized)
+			service.log.WarnError(sesh.RequestIsMissingSessionCookie, cookieErr, sesh.LogFields{})
+			RespondWithStructuredError(w, sesh.RequestIsMissingSessionCookie, http.StatusUnauthorized)
 			return
 		}
 
 		sessionKey := sessionCookie.Value
-		account, session, err := service.session.GetAccountIfSessionIsValid(sessionKey)
+		session, err := service.session.GetSessionIfValid(sessionKey)
 		if err != nil {
-			if err == api.ErrValidSessionNotFound {
-				service.log.WarnError(api.SessionDoesNotExist, err, api.LogFields{})
-				RespondWithStructuredError(w, api.SessionDoesNotExist, http.StatusUnauthorized)
+			if err == sesh.ErrValidSessionNotFound {
+				service.log.WarnError(sesh.SessionDoesNotExist, err, sesh.LogFields{})
+				RespondWithStructuredError(w, sesh.SessionDoesNotExist, http.StatusUnauthorized)
 				return
 			}
-			if err == api.ErrSessionExpired {
-				service.log.WarnError(api.SessionExpired, err, api.LogFields{})
-				RespondWithStructuredError(w, api.SessionExpired, http.StatusUnauthorized)
+			if err == sesh.ErrSessionExpired {
+				service.log.WarnError(sesh.SessionExpired, err, sesh.LogFields{})
+				RespondWithStructuredError(w, sesh.SessionExpired, http.StatusUnauthorized)
 				return
 			}
-			service.log.WarnError(api.SessionUnexpectedError, err, api.LogFields{})
+			service.log.WarnError(sesh.SessionUnexpectedError, err, sesh.LogFields{})
 			RespondWithStructuredError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
-		service.log.AddField("account_id", account.ID)
-
-		newContext := SetAccountAndSessionInRequestContext(r, account, session)
+		newContext := SetSessionInRequestContext(r, session)
 		next.ServeHTTP(w, r.WithContext(newContext))
 	})
 }
@@ -105,22 +105,57 @@ func DeleteSessionCookie(w http.ResponseWriter) {
 // -- Context Storage
 type authContextKey string
 
-const accountKey authContextKey = "ACCOUNT"
 const sessionKey authContextKey = "SESSION"
 
-// SetAccountAndSessionInRequestContext modifies the request's Context() to add the Account
-func SetAccountAndSessionInRequestContext(r *http.Request, account api.Account, session api.Session) context.Context {
-	accountContext := context.WithValue(r.Context(), accountKey, account)
-	sessionContext := context.WithValue(accountContext, sessionKey, session)
+// SetSessionInRequestContext modifies the request's Context() to add the Account
+func SetSessionInRequestContext(r *http.Request, session sesh.Session) context.Context {
+	sessionContext := context.WithValue(r.Context(), sessionKey, session)
 
 	return sessionContext
 }
 
-// AccountAndSessionFromRequestContext gets the reference to the Account stored in the request.Context()
-func AccountAndSessionFromRequestContext(r *http.Request) (api.Account, api.Session) {
-	// This will panic if it is not set or if it's not an Account. That will always be a programmer
+// SessionFromRequestContext gets the reference to the Account stored in the request.Context()
+func SessionFromRequestContext(r *http.Request) sesh.Session {
+	// This will panic if it is not set or if it's not a Session. That will always be a programmer
 	// error so I think that it's worth the tradeoff for the simpler method signature.
-	account := r.Context().Value(accountKey).(api.Account)
-	session := r.Context().Value(sessionKey).(api.Session)
-	return account, session
+	session := r.Context().Value(sessionKey).(sesh.Session)
+	return session
+}
+
+// Error Printing code
+// RespondWithStructuredError writes an error code and a json error response
+func RespondWithStructuredError(w http.ResponseWriter, errorMessage string, code int) {
+	errorStruct := newStructuredErrors(newStructuredError(errorMessage))
+	// It's a little ugly to not just have json write directly to the the Writer, but I don't see another way
+	// to return 500 correctly in the case of an error.
+	jsonString, err := json.Marshal(errorStruct)
+	if err != nil {
+		// Log error
+		http.Error(w, "Internal Server Error: failed to encode error json", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Println("ENCODING")
+	http.Error(w, string(jsonString), code)
+}
+
+type structuredError struct {
+	Message string `json:"message"`
+	Code    string `json:"code,omitempty"`
+}
+
+type structuredErrors struct {
+	Errors []structuredError `json:"errors"`
+}
+
+func newStructuredError(message string) structuredError {
+	return structuredError{
+		Message: message,
+	}
+}
+
+func newStructuredErrors(errors ...structuredError) structuredErrors {
+	return structuredErrors{
+		Errors: errors,
+	}
 }
