@@ -21,6 +21,10 @@ func NewDBStore(db *sqlx.DB) DBStore {
 	}
 }
 
+func (s DBStore) Close() error {
+	return s.db.Close()
+}
+
 // CreateSession creates a new session. It errors if a valid session already exists.
 func (s DBStore) CreateSession(accountID string, sessionKey string, expirationDuration time.Duration) error {
 	expirationDate := time.Now().UTC().Add(expirationDuration)
