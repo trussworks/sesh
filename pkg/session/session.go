@@ -10,18 +10,18 @@ import (
 	"github.com/gorilla/securecookie"
 	"github.com/pkg/errors"
 
-	"github.com/us-dod-saber/culper/api"
+	"github.com/trussworks/sesh"
 )
 
 // Service represents a StorageService internally
 type Service struct {
 	timeout time.Duration
-	store   api.StorageService
-	log     api.LogService
+	store   sesh.SessionStorageService
+	log     sesh.LogService
 }
 
 // NewSessionService returns a SessionService
-func NewSessionService(timeout time.Duration, store api.StorageService, log api.LogService) *Service {
+func NewSessionService(timeout time.Duration, store sesh.SessionStorageService, log sesh.LogService) *Service {
 	return &Service{
 		timeout,
 		store,
@@ -49,7 +49,7 @@ func hashSessionKey(sessionKey string) string {
 }
 
 // UserDidAuthenticate returns a session key and an error if applicable
-func (s Service) UserDidAuthenticate(accountID int, sessionIndex sql.NullString) (string, error) {
+func (s Service) UserDidAuthenticate(accountID string) (string, error) {
 	sessionKey, keyErr := generateSessionKey()
 	if keyErr != nil {
 		return "", keyErr
@@ -65,46 +65,46 @@ func (s Service) UserDidAuthenticate(accountID int, sessionIndex sql.NullString)
 	if fetchErr == nil {
 		if extantSession.ExpirationDate.Before(time.Now().UTC()) {
 			// If the session is expired, delete it.
-			s.log.Info(fmt.Sprintf("Creating new Session: Previous session expired at %s", extantSession.ExpirationDate), api.LogFields{"account_id": accountID})
+			s.log.Info(fmt.Sprintf("Creating new Session: Previous session expired at %s", extantSession.ExpirationDate), sesh.LogFields{"account_id": accountID})
 			delErr := s.store.DeleteSession(extantSession.SessionKey)
 			if delErr != nil {
-				s.log.WarnError("Unexpectedly failed to delete an expired session during authentication", delErr, api.LogFields{"account_id": accountID})
+				s.log.WarnError("Unexpectedly failed to delete an expired session during authentication", delErr, sesh.LogFields{"account_id": accountID})
 				// We will continue and attempt to create the new session here, anyway.
 			}
 		} else {
 			// If the session is valid, log that this is a concurrent login, and then delete it.
-			s.log.Info(api.SessionConcurrentLogin, api.LogFields{"prev_session_hash": hashSessionKey(extantSession.SessionKey)})
+			s.log.Info(sesh.SessionConcurrentLogin, sesh.LogFields{"prev_session_hash": hashSessionKey(extantSession.SessionKey)})
 			delErr := s.store.DeleteSession(extantSession.SessionKey)
 			if delErr != nil {
-				s.log.WarnError("Unexpectedly failed to delete an expired session during authentication", delErr, api.LogFields{"account_id": accountID})
+				s.log.WarnError("Unexpectedly failed to delete an expired session during authentication", delErr, sesh.LogFields{"account_id": accountID})
 				// We will continue and attempt to create the new session here, anyway.
 			}
 		}
 	}
 
-	createErr := s.store.CreateSession(accountID, sessionKey, sessionIndex, s.timeout)
+	createErr := s.store.CreateSession(accountID, sessionKey, s.timeout)
 	if createErr != nil {
 		return "", createErr
 	}
-	s.log.Info(api.SessionCreated, api.LogFields{"session_hash": hashSessionKey(sessionKey)})
+	s.log.Info(sesh.SessionCreated, sesh.LogFields{"session_hash": hashSessionKey(sessionKey)})
 
 	return sessionKey, createErr
 }
 
-// GetAccountIfSessionIsValid returns an Account if the session key is valid and an error otherwise
-func (s Service) GetAccountIfSessionIsValid(sessionKey string) (api.Account, api.Session, error) {
-	account, session, fetchErr := s.store.ExtendAndFetchSessionAccount(sessionKey, s.timeout)
+// GetSessionIfValid returns a session if the session key is valid and an error otherwise
+func (s Service) GetSessionIfValid(sessionKey string) (sesh.Session, error) {
+	session, fetchErr := s.store.ExtendAndFetchSession(sessionKey, s.timeout)
 	if fetchErr != nil {
-		if fetchErr == api.ErrSessionExpired {
-			s.log.Info(api.SessionExpired, api.LogFields{"session_hash": hashSessionKey(sessionKey)})
-		} else if fetchErr == api.ErrValidSessionNotFound {
-			s.log.Info(api.SessionDoesNotExist, api.LogFields{"session_hash": hashSessionKey(sessionKey)})
+		if fetchErr == sesh.ErrSessionExpired {
+			s.log.Info(sesh.SessionExpired, sesh.LogFields{"session_hash": hashSessionKey(sessionKey)})
+		} else if fetchErr == sesh.ErrValidSessionNotFound {
+			s.log.Info(sesh.SessionDoesNotExist, sesh.LogFields{"session_hash": hashSessionKey(sessionKey)})
 		}
 
-		return api.Account{}, api.Session{}, fetchErr
+		return sesh.Session{}, fetchErr
 	}
 
-	return account, session, nil
+	return session, nil
 }
 
 // UserDidLogout attempts to end the session and returns an error on failure
@@ -114,7 +114,7 @@ func (s Service) UserDidLogout(sessionKey string) error {
 		return delErr
 	}
 
-	s.log.Info(api.SessionDestroyed, api.LogFields{"session_hash": hashSessionKey(sessionKey)})
+	s.log.Info(sesh.SessionDestroyed, sesh.LogFields{"session_hash": hashSessionKey(sessionKey)})
 
 	return nil
 }
