@@ -10,7 +10,7 @@ import (
 )
 
 // SessionCookieName is the name of the cookie that is used to store the session
-const SessionCookieName = "eapp-session-key"
+const SessionCookieName = "sesh-session-key"
 
 // SessionMiddleware is the session handler.
 type SessionMiddleware struct {

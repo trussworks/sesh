@@ -3,6 +3,7 @@ package dbstore
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -13,8 +14,20 @@ import (
 	"github.com/trussworks/sesh"
 )
 
+func dbURLFromEnv() string {
+	host := os.Getenv("DATABASE_HOST")
+	port := os.Getenv("DATABASE_PORT")
+	name := os.Getenv("DATABASE_NAME")
+	user := os.Getenv("DATABASE_USER")
+	// password := os.Getenv("DATABASE_PASSWORD")
+	sslmode := os.Getenv("DATABASE_SSL_MODE")
+
+	connStr := fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, name, sslmode)
+	return connStr
+}
+
 func getTestStore() (DBStore, error) {
-	connStr := "postgres://postgres@localhost:5432/test_sesh?sslmode=disable"
+	connStr := dbURLFromEnv()
 
 	connection, err := sqlx.Open("postgres", connStr)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -48,10 +49,22 @@ func makeAuthenticatedFormRequest(logger sesh.LogService, sessionService *sessio
 	return response
 }
 
+func dbURLFromEnv() string {
+	host := os.Getenv("DATABASE_HOST")
+	port := os.Getenv("DATABASE_PORT")
+	name := os.Getenv("DATABASE_NAME")
+	user := os.Getenv("DATABASE_USER")
+	// password := os.Getenv("DATABASE_PASSWORD")
+	sslmode := os.Getenv("DATABASE_SSL_MODE")
+
+	connStr := fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, name, sslmode)
+	return connStr
+}
+
 func getTestStore(t *testing.T) sesh.SessionStorageService {
 	t.Helper()
 
-	connStr := "postgres://postgres@localhost:5432/test_sesh?sslmode=disable"
+	connStr := dbURLFromEnv()
 
 	connection, err := sqlx.Open("postgres", connStr)
 	if err != nil {
