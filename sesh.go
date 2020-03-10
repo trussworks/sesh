@@ -1,87 +1,52 @@
 package sesh
 
 import (
-	"errors"
-	"fmt"
+	"context"
+	"net/http"
 	"time"
+
+	"github.com/jmoiron/sqlx"
+
+	"github.com/trussworks/sesh/pkg/dbstore"
+	"github.com/trussworks/sesh/pkg/domain"
+	"github.com/trussworks/sesh/pkg/seshttp"
+	"github.com/trussworks/sesh/pkg/session"
 )
 
-var (
-	// ErrValidSessionNotFound is returned when a valid session is not found
-	ErrValidSessionNotFound = errors.New("Valid session not found")
+// Actual API
+type SeshService interface {
+	// UserDidAuthenticate creates a new session and writes an HTTPOnly cookie to track that session
+	// it returns errors
+	UserDidAuthenticate(w http.ResponseWriter, accountID string) (sessionKey string, err error)
+	// UserDidLogout destroys the session, writing cookies.
+	// it returns errors
+	UserDidLogout(w http.ResponseWriter) error
 
-	// ErrSessionExpired is returned when the requested session has expired
-	ErrSessionExpired = errors.New("Session is expired")
-)
-
-// log messages
-var (
-	SessionExpired                = "Auth failed because of an expired session"
-	SessionDoesNotExist           = "Auth failed because of an invalid session"
-	SessionUnexpectedError        = "An unexpected error occured while checking the session."
-	SessionCreationFailed         = "An unexpected error occured creating a session"
-	RequestIsMissingSessionCookie = "Unauthorized: Request is missing a session cookie"
-
-	SessionCreated         = "New Session Created"
-	SessionDestroyed       = "Session Was Destroyed"
-	SessionRefreshed       = "Session was refreshed with the refresh API"
-	SessionConcurrentLogin = "User logged in again with a concurrent active session"
-)
-
-// Temporary logging stuff. we should turn this into a callback.
-type LogFields map[string]interface{}
-
-type LogService interface {
-	Info(message string, fields LogFields)
-	WarnError(message string, err error, fields LogFields)
+	// AuthenticationMiddleware reads the session cookie and verifies that the request is being made by someone with a valid session
+	// If the session is invalid it responds with an error and does not call any further handlers.
+	AuthenticationMiddleware() http.Handler
 }
 
-type FmtLogger bool
-
-func (l FmtLogger) Info(message string, fields LogFields) {
-	fmt.Printf("INFO: %s %v\n", message, fields)
+// SessionFromContext pulls the current sesh.Session object out of the context
+func SessionFromContext(ctx context.Context) domain.Session {
+	panic(99)
 }
 
-func (l FmtLogger) WarnError(message string, err error, fields LogFields) {
-	fmt.Printf("WARN: %s %v %v\n", message, err, fields)
+type seshServiceImpl struct {
+	session    domain.SessionService
+	middleware *seshttp.SessionMiddleware
+	cookie     seshttp.SessionCookieService
 }
 
-// end logging stuff
+func NewSeshService(db *sqlx.DB, log domain.LogService, timeout time.Duration, useSecureCookie bool) seshServiceImpl {
+	store := dbstore.NewDBStore(db)
+	session := session.NewSessionService(timeout, store, log)
+	middleware := seshttp.NewSessionMiddleware(log, session)
+	cookie := seshttp.NewSessionCookieService(useSecureCookie)
 
-type SessionStorageService interface {
-	// Close closes the storage connection
-	Close() error
-
-	// CreateSession creates a new session. It errors if a valid session already exists.
-	CreateSession(accountID string, sessionKey string, expirationDuration time.Duration) error
-
-	// FetchPossiblyExpiredSession returns a session row by account ID regardless of wether it is expired
-	// This is potentially dangerous, it is only intended to be used during the new login flow, never to check
-	// on a valid session for authentication purposes.
-	FetchPossiblyExpiredSession(accountID string) (Session, error)
-
-	// DeleteSession removes a session record from the db
-	DeleteSession(sessionKey string) error
-
-	// ExtendAndFetchSession fetches session data from the db
-	// On success it returns the session
-	// On failure, it can return ErrValidSessionNotFound, ErrSessionExpired, or an unexpected error
-	ExtendAndFetchSession(sessionKey string, expirationDuration time.Duration) (Session, error)
-}
-
-// SessionService backs user authentication -- providing a way to verify & modify session status
-type SessionService interface {
-	// UserDidAuthenticate creates a session for a newly logged in user
-	UserDidAuthenticate(accountID string) (sessionKey string, err error)
-	// GetSessionIfValid returns a session if the session is valid, or ErrValidSessionNotFound otherwise
-	GetSessionIfValid(sessionKey string) (session Session, err error)
-	// UserDidLogout invalidates a session for a newly logged out user
-	UserDidLogout(sessionKey string) error
-}
-
-// Session contains all the information about a given user session in eApp
-type Session struct {
-	AccountID      string    `db:"account_id"`
-	SessionKey     string    `db:"session_key"`
-	ExpirationDate time.Time `db:"expiration_date"`
+	return seshServiceImpl{
+		session,
+		middleware,
+		cookie,
+	}
 }

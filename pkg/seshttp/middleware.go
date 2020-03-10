@@ -1,4 +1,4 @@
-package http
+package seshttp
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/trussworks/sesh"
+	"github.com/trussworks/sesh/pkg/domain"
 )
 
 // SessionCookieName is the name of the cookie that is used to store the session
@@ -14,12 +14,12 @@ const SessionCookieName = "sesh-session-key"
 
 // SessionMiddleware is the session handler.
 type SessionMiddleware struct {
-	log     sesh.LogService
-	session sesh.SessionService
+	log     domain.LogService
+	session domain.SessionService
 }
 
 // NewSessionMiddleware returns a configured SessionMiddleware
-func NewSessionMiddleware(log sesh.LogService, session sesh.SessionService) *SessionMiddleware {
+func NewSessionMiddleware(log domain.LogService, session domain.SessionService) *SessionMiddleware {
 	return &SessionMiddleware{
 		log,
 		session,
@@ -32,25 +32,25 @@ func (service SessionMiddleware) Middleware(next http.Handler) http.Handler {
 
 		sessionCookie, cookieErr := r.Cookie(SessionCookieName)
 		if cookieErr != nil {
-			service.log.WarnError(sesh.RequestIsMissingSessionCookie, cookieErr, sesh.LogFields{})
-			RespondWithStructuredError(w, sesh.RequestIsMissingSessionCookie, http.StatusUnauthorized)
+			service.log.WarnError(domain.RequestIsMissingSessionCookie, cookieErr, domain.LogFields{})
+			RespondWithStructuredError(w, domain.RequestIsMissingSessionCookie, http.StatusUnauthorized)
 			return
 		}
 
 		sessionKey := sessionCookie.Value
 		session, err := service.session.GetSessionIfValid(sessionKey)
 		if err != nil {
-			if err == sesh.ErrValidSessionNotFound {
-				service.log.WarnError(sesh.SessionDoesNotExist, err, sesh.LogFields{})
-				RespondWithStructuredError(w, sesh.SessionDoesNotExist, http.StatusUnauthorized)
+			if err == domain.ErrValidSessionNotFound {
+				service.log.WarnError(domain.SessionDoesNotExist, err, domain.LogFields{})
+				RespondWithStructuredError(w, domain.SessionDoesNotExist, http.StatusUnauthorized)
 				return
 			}
-			if err == sesh.ErrSessionExpired {
-				service.log.WarnError(sesh.SessionExpired, err, sesh.LogFields{})
-				RespondWithStructuredError(w, sesh.SessionExpired, http.StatusUnauthorized)
+			if err == domain.ErrSessionExpired {
+				service.log.WarnError(domain.SessionExpired, err, domain.LogFields{})
+				RespondWithStructuredError(w, domain.SessionExpired, http.StatusUnauthorized)
 				return
 			}
-			service.log.WarnError(sesh.SessionUnexpectedError, err, sesh.LogFields{})
+			service.log.WarnError(domain.SessionUnexpectedError, err, domain.LogFields{})
 			RespondWithStructuredError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -108,21 +108,27 @@ type authContextKey string
 const sessionKey authContextKey = "SESSION"
 
 // SetSessionInRequestContext modifies the request's Context() to add the Account
-func SetSessionInRequestContext(r *http.Request, session sesh.Session) context.Context {
+func SetSessionInRequestContext(r *http.Request, session domain.Session) context.Context {
 	sessionContext := context.WithValue(r.Context(), sessionKey, session)
 
 	return sessionContext
 }
 
 // SessionFromRequestContext gets the reference to the Account stored in the request.Context()
-func SessionFromRequestContext(r *http.Request) sesh.Session {
+func SessionFromRequestContext(r *http.Request) domain.Session {
 	// This will panic if it is not set or if it's not a Session. That will always be a programmer
 	// error so I think that it's worth the tradeoff for the simpler method signature.
-	session := r.Context().Value(sessionKey).(sesh.Session)
+	return SessionFromContext(r.Context())
+}
+
+// SessionFromContext gets the reference to the Account stored in the request.Context()
+func SessionFromContext(ctx context.Context) domain.Session {
+	// This will panic if it is not set or if it's not a Session. That will always be a programmer
+	// error so I think that it's worth the tradeoff for the simpler method signature.
+	session := ctx.Value(sessionKey).(domain.Session)
 	return session
 }
 
-// Error Printing code
 // RespondWithStructuredError writes an error code and a json error response
 func RespondWithStructuredError(w http.ResponseWriter, errorMessage string, code int) {
 	errorStruct := newStructuredErrors(newStructuredError(errorMessage))

@@ -3,7 +3,7 @@ package mock
 import (
 	"fmt"
 
-	"github.com/trussworks/sesh"
+	"github.com/trussworks/sesh/pkg/domain"
 )
 
 // Log Recorder
@@ -12,28 +12,28 @@ import (
 type LogLine struct {
 	Level   string
 	Message string
-	Fields  sesh.LogFields
+	Fields  domain.LogFields
 }
 
 // LogRecorder is a mock log recorder
 type LogRecorder struct {
-	sesh.LogService
+	domain.LogService
 	lines   []LogLine
-	globals sesh.LogFields
+	globals domain.LogFields
 }
 
-func NewLogRecorder(service sesh.LogService) LogRecorder {
+func NewLogRecorder(service domain.LogService) LogRecorder {
 	return LogRecorder{
 		LogService: service,
 	}
 }
 
 // RecordLine records and returns a new LogLine with its level, message, and fields.
-func (r *LogRecorder) RecordLine(level string, message string, fields sesh.LogFields) LogLine {
+func (r *LogRecorder) RecordLine(level string, message string, fields domain.LogFields) LogLine {
 	newLine := LogLine{
 		Level:   level,
 		Message: message,
-		Fields:  sesh.LogFields{},
+		Fields:  domain.LogFields{},
 	}
 
 	for k, v := range r.globals {
@@ -50,7 +50,7 @@ func (r *LogRecorder) RecordLine(level string, message string, fields sesh.LogFi
 }
 
 // Info records new LogLine as INFO level
-func (r *LogRecorder) Info(message string, fields sesh.LogFields) {
+func (r *LogRecorder) Info(message string, fields domain.LogFields) {
 	line := r.RecordLine("INFO", message, fields)
 	r.LogService.Info(line.Message, line.Fields)
 }
@@ -58,7 +58,7 @@ func (r *LogRecorder) Info(message string, fields sesh.LogFields) {
 // AddField adds new fields to LogRecorder's globals field
 func (r *LogRecorder) AddField(name string, value interface{}) {
 	if r.globals == nil {
-		r.globals = sesh.LogFields{}
+		r.globals = domain.LogFields{}
 	}
 	r.globals[name] = value
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
-	"github.com/trussworks/sesh"
+	"github.com/trussworks/sesh/pkg/domain"
 )
 
 func dbURLFromEnv() string {
@@ -106,7 +106,7 @@ func TestFetchExistingSessionToOverwrite(t *testing.T) {
 	}
 
 	_, expectedFetchErr := store.ExtendAndFetchSession(firstSessionKey, expirationDuration)
-	if expectedFetchErr != sesh.ErrValidSessionNotFound {
+	if expectedFetchErr != domain.ErrValidSessionNotFound {
 		t.Fatal("using the first session key should cause an error to be thrown, since it has been overwritten, got", expectedFetchErr)
 	}
 }
@@ -183,7 +183,7 @@ func TestFetchSessionReturnsErrorOnExpiredSession(t *testing.T) {
 	}
 
 	_, err := store.ExtendAndFetchSession(sessionKey, expirationDuration)
-	if err != sesh.ErrSessionExpired {
+	if err != domain.ErrSessionExpired {
 		t.Fatal(err)
 	}
 }
@@ -194,7 +194,7 @@ func TestDeleteSessionRemovesRecord(t *testing.T) {
 	store.CreateSession(accountID, sessionKey, expirationDuration)
 
 	fetchQuery := `SELECT * FROM sessions WHERE session_key = $1`
-	row := sesh.Session{}
+	row := domain.Session{}
 	store.db.Get(&row, fetchQuery, sessionKey)
 	if row.SessionKey != sessionKey {
 		t.Fatal("new session should have been created")
@@ -205,7 +205,7 @@ func TestDeleteSessionRemovesRecord(t *testing.T) {
 		t.Fatal("encountered issue when trinyg to delete session")
 	}
 
-	row = sesh.Session{}
+	row = domain.Session{}
 	expectedErr := store.db.Get(&row, fetchQuery, sessionKey)
 	if expectedErr != sql.ErrNoRows {
 		t.Fatal("session should not exist")
@@ -221,7 +221,7 @@ func TestDeleteSessionReturnsErrIfSessionNotFound(t *testing.T) {
 	sessionKeyWithNoAssociatedRecord := uuid.New().String()
 
 	err := store.DeleteSession(sessionKeyWithNoAssociatedRecord)
-	if err != sesh.ErrValidSessionNotFound {
+	if err != domain.ErrValidSessionNotFound {
 		t.Fatal("session should not exist")
 	}
 }

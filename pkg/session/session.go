@@ -10,18 +10,18 @@ import (
 	"github.com/gorilla/securecookie"
 	"github.com/pkg/errors"
 
-	"github.com/trussworks/sesh"
+	"github.com/trussworks/sesh/pkg/domain"
 )
 
-// Service represents a StorageService internally
+// Service represents a SessionService internally
 type Service struct {
 	timeout time.Duration
-	store   sesh.SessionStorageService
-	log     sesh.LogService
+	store   domain.SessionStorageService
+	log     domain.LogService
 }
 
 // NewSessionService returns a SessionService
-func NewSessionService(timeout time.Duration, store sesh.SessionStorageService, log sesh.LogService) *Service {
+func NewSessionService(timeout time.Duration, store domain.SessionStorageService, log domain.LogService) *Service {
 	return &Service{
 		timeout,
 		store,
@@ -65,18 +65,18 @@ func (s Service) UserDidAuthenticate(accountID string) (string, error) {
 	if fetchErr == nil {
 		if extantSession.ExpirationDate.Before(time.Now().UTC()) {
 			// If the session is expired, delete it.
-			s.log.Info(fmt.Sprintf("Creating new Session: Previous session expired at %s", extantSession.ExpirationDate), sesh.LogFields{"account_id": accountID})
+			s.log.Info(fmt.Sprintf("Creating new Session: Previous session expired at %s", extantSession.ExpirationDate), domain.LogFields{"account_id": accountID})
 			delErr := s.store.DeleteSession(extantSession.SessionKey)
 			if delErr != nil {
-				s.log.WarnError("Unexpectedly failed to delete an expired session during authentication", delErr, sesh.LogFields{"account_id": accountID})
+				s.log.WarnError("Unexpectedly failed to delete an expired session during authentication", delErr, domain.LogFields{"account_id": accountID})
 				// We will continue and attempt to create the new session here, anyway.
 			}
 		} else {
 			// If the session is valid, log that this is a concurrent login, and then delete it.
-			s.log.Info(sesh.SessionConcurrentLogin, sesh.LogFields{"prev_session_hash": hashSessionKey(extantSession.SessionKey)})
+			s.log.Info(domain.SessionConcurrentLogin, domain.LogFields{"prev_session_hash": hashSessionKey(extantSession.SessionKey)})
 			delErr := s.store.DeleteSession(extantSession.SessionKey)
 			if delErr != nil {
-				s.log.WarnError("Unexpectedly failed to delete an expired session during authentication", delErr, sesh.LogFields{"account_id": accountID})
+				s.log.WarnError("Unexpectedly failed to delete an expired session during authentication", delErr, domain.LogFields{"account_id": accountID})
 				// We will continue and attempt to create the new session here, anyway.
 			}
 		}
@@ -86,22 +86,22 @@ func (s Service) UserDidAuthenticate(accountID string) (string, error) {
 	if createErr != nil {
 		return "", createErr
 	}
-	s.log.Info(sesh.SessionCreated, sesh.LogFields{"session_hash": hashSessionKey(sessionKey)})
+	s.log.Info(domain.SessionCreated, domain.LogFields{"session_hash": hashSessionKey(sessionKey)})
 
 	return sessionKey, createErr
 }
 
 // GetSessionIfValid returns a session if the session key is valid and an error otherwise
-func (s Service) GetSessionIfValid(sessionKey string) (sesh.Session, error) {
+func (s Service) GetSessionIfValid(sessionKey string) (domain.Session, error) {
 	session, fetchErr := s.store.ExtendAndFetchSession(sessionKey, s.timeout)
 	if fetchErr != nil {
-		if fetchErr == sesh.ErrSessionExpired {
-			s.log.Info(sesh.SessionExpired, sesh.LogFields{"session_hash": hashSessionKey(sessionKey)})
-		} else if fetchErr == sesh.ErrValidSessionNotFound {
-			s.log.Info(sesh.SessionDoesNotExist, sesh.LogFields{"session_hash": hashSessionKey(sessionKey)})
+		if fetchErr == domain.ErrSessionExpired {
+			s.log.Info(domain.SessionExpired, domain.LogFields{"session_hash": hashSessionKey(sessionKey)})
+		} else if fetchErr == domain.ErrValidSessionNotFound {
+			s.log.Info(domain.SessionDoesNotExist, domain.LogFields{"session_hash": hashSessionKey(sessionKey)})
 		}
 
-		return sesh.Session{}, fetchErr
+		return domain.Session{}, fetchErr
 	}
 
 	return session, nil
@@ -114,7 +114,7 @@ func (s Service) UserDidLogout(sessionKey string) error {
 		return delErr
 	}
 
-	s.log.Info(sesh.SessionDestroyed, sesh.LogFields{"session_hash": hashSessionKey(sessionKey)})
+	s.log.Info(domain.SessionDestroyed, domain.LogFields{"session_hash": hashSessionKey(sessionKey)})
 
 	return nil
 }

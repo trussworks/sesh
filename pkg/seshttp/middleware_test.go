@@ -1,4 +1,4 @@
-package http
+package seshttp
 
 import (
 	"fmt"
@@ -13,12 +13,12 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
-	"github.com/trussworks/sesh"
 	"github.com/trussworks/sesh/pkg/dbstore"
+	"github.com/trussworks/sesh/pkg/domain"
 	"github.com/trussworks/sesh/pkg/session"
 )
 
-func makeAuthenticatedFormRequest(logger sesh.LogService, sessionService *session.Service, sessionKey string) *http.Response {
+func makeAuthenticatedFormRequest(logger domain.LogService, sessionService *session.Service, sessionKey string) *http.Response {
 	sessionMiddleware := NewSessionMiddleware(logger, sessionService)
 
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +61,7 @@ func dbURLFromEnv() string {
 	return connStr
 }
 
-func getTestStore(t *testing.T) sesh.SessionStorageService {
+func getTestStore(t *testing.T) domain.SessionStorageService {
 	t.Helper()
 
 	connStr := dbURLFromEnv()
@@ -77,7 +77,7 @@ func getTestStore(t *testing.T) sesh.SessionStorageService {
 
 func TestFullSessionHTTPFlow_Unauthenticated(t *testing.T) {
 	store := getTestStore(t)
-	logger := sesh.FmtLogger(true)
+	logger := domain.FmtLogger(true)
 	defer store.Close()
 	sessionService := session.NewSessionService(5*time.Minute, store, logger)
 
@@ -90,7 +90,7 @@ func TestFullSessionHTTPFlow_Unauthenticated(t *testing.T) {
 
 func TestFullSessionHTTPFlow_BadAuthentication(t *testing.T) {
 	store := getTestStore(t)
-	logger := sesh.FmtLogger(true)
+	logger := domain.FmtLogger(true)
 	defer store.Close()
 	sessionService := session.NewSessionService(5*time.Minute, store, logger)
 
@@ -103,7 +103,7 @@ func TestFullSessionHTTPFlow_BadAuthentication(t *testing.T) {
 }
 
 type testLoginHandler struct {
-	session sesh.SessionService
+	session domain.SessionService
 	cookie  SessionCookieService
 }
 
@@ -132,7 +132,7 @@ func (h testAuthenticatedHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 }
 
 type testLogoutHandler struct {
-	session sesh.SessionService
+	session domain.SessionService
 }
 
 func (h testLogoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +151,7 @@ func (h testLogoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func TestFullSessionHTTPFlow(t *testing.T) {
 	store := getTestStore(t)
-	logger := sesh.FmtLogger(true)
+	logger := domain.FmtLogger(true)
 	defer store.Close()
 	sessionService := session.NewSessionService(5*time.Minute, store, logger)
 	cookieService := NewSessionCookieService(false)

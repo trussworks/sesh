@@ -8,7 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 
-	"github.com/trussworks/sesh"
+	"github.com/trussworks/sesh/pkg/domain"
 )
 
 type DBStore struct {
@@ -44,16 +44,16 @@ func (s DBStore) CreateSession(accountID string, sessionKey string, expirationDu
 // FetchPossiblyExpiredSession returns a session row by account ID regardless of wether it is expired
 // This is potentially dangerous, it is only intended to be used during the new login flow, never to check
 // on a valid session for authentication purposes.
-func (s DBStore) FetchPossiblyExpiredSession(accountID string) (sesh.Session, error) {
+func (s DBStore) FetchPossiblyExpiredSession(accountID string) (domain.Session, error) {
 	fetchQuery := `SELECT * FROM sessions WHERE account_id = $1`
 
-	session := sesh.Session{}
+	session := domain.Session{}
 	selectErr := s.db.Get(&session, fetchQuery, accountID)
 	if selectErr != nil {
 		if selectErr == sql.ErrNoRows {
-			return sesh.Session{}, sql.ErrNoRows
+			return domain.Session{}, sql.ErrNoRows
 		}
-		return sesh.Session{}, fmt.Errorf("Failed to fetch a session row: %w", selectErr)
+		return domain.Session{}, fmt.Errorf("Failed to fetch a session row: %w", selectErr)
 	}
 
 	return session, nil
@@ -71,75 +71,16 @@ func (s DBStore) DeleteSession(sessionKey string) error {
 
 	rowsAffected, _ := sqlResult.RowsAffected()
 	if rowsAffected == 0 {
-		return sesh.ErrValidSessionNotFound
+		return domain.ErrValidSessionNotFound
 	}
 
 	return nil
 }
 
-// type sessionAccountRow struct {
-// 	sesh.Session
-// 	sesh.Account
-// }
-
-// // ExtendAndFetchSessionAccount fetches an account and session data from the db
-// // On success it returns the account and the session
-// // On failure, it can return ErrValidSessionNotFound, ErrSessionExpired, or an unexpected error
-// func (s DBStore) ExtendAndFetchSessionAccount(sessionKey string, expirationDuration time.Duration) (sesh.Account, sesh.Session, error) {
-
-// 	expirationDate := time.Now().UTC().Add(expirationDuration)
-
-// 	// We update the session expiration date to be $DURATION from now and fetch the account and the session.
-// 	fetchQuery := `UPDATE sessions
-// 					SET expiration_date = $1
-// 				FROM accounts
-// 				WHERE
-// 					sessions.account_id = accounts.id
-// 					AND sessions.session_key = $2
-// 					AND sessions.expiration_date > $3
-// 				RETURNING
-// 					sessions.session_key, sessions.account_id, sessions.expiration_date, sessions.session_index,
-// 					accounts.id, accounts.form_version, accounts.form_type, accounts.username,
-// 					accounts.email, accounts.external_id, accounts.status`
-
-// 	row := sessionAccountRow{}
-// 	selectErr := s.db.Get(&row, fetchQuery, expirationDate, sessionKey, time.Now().UTC())
-// 	if selectErr != nil {
-// 		if selectErr != sql.ErrNoRows {
-// 			return sesh.Account{}, sesh.Session{}, fmt.Errorf("Unexpected error looking for valid session: %w", selectErr)
-// 		}
-
-// 		// If the above query returns no rows, either the session is expired, or it does not exist.
-// 		// To determine which and return an appropriate error, we do a second query to see if it exists
-// 		existsQuery := `SELECT sessions.* FROM sessions, accounts WHERE sessions.account_id = accounts.id AND sessions.session_key = $1`
-
-// 		session := sesh.Session{}
-// 		selectAgainErr := s.db.Get(&session, existsQuery, sessionKey)
-// 		if selectAgainErr != nil {
-// 			if selectAgainErr == sql.ErrNoRows {
-// 				return sesh.Account{}, sesh.Session{}, sesh.ErrValidSessionNotFound
-// 			}
-// 			return sesh.Account{}, sesh.Session{}, fmt.Errorf("Unexpected error fetching single invalid session: %w", selectAgainErr)
-// 		}
-
-// 		// quick sanity check:
-// 		if session.ExpirationDate.After(time.Now()) {
-// 			errors.New(fmt.Sprintf("For some reason, this session we could not find was not actually expired: %s", session.SessionKey))
-// 		}
-// 		// The session must have been expired, not deleted.
-// 		return sesh.Account{}, sesh.Session{}, sesh.ErrSessionExpired
-// 	}
-
-// 	// time.Times come back from the db with no tz info, so let's set it to UTC to be safe and consistent.
-// 	row.Session.ExpirationDate = row.Session.ExpirationDate.UTC()
-
-// 	return row.Account, row.Session, nil
-// }
-
 // ExtendAndFetchSession fetches session data from the db
 // On success it returns the session
 // On failure, it can return ErrValidSessionNotFound, ErrSessionExpired, or an unexpected error
-func (s DBStore) ExtendAndFetchSession(sessionKey string, expirationDuration time.Duration) (sesh.Session, error) {
+func (s DBStore) ExtendAndFetchSession(sessionKey string, expirationDuration time.Duration) (domain.Session, error) {
 	fmt.Println("Fetching", sessionKey)
 
 	expirationDate := time.Now().UTC().Add(expirationDuration)
@@ -153,24 +94,24 @@ func (s DBStore) ExtendAndFetchSession(sessionKey string, expirationDuration tim
 				RETURNING
 					session_key, account_id, expiration_date`
 
-	session := sesh.Session{}
+	session := domain.Session{}
 	selectErr := s.db.Get(&session, fetchQuery, expirationDate, sessionKey, time.Now().UTC())
 	if selectErr != nil {
 		if selectErr != sql.ErrNoRows {
-			return sesh.Session{}, fmt.Errorf("Unexpected error looking for valid session: %w", selectErr)
+			return domain.Session{}, fmt.Errorf("Unexpected error looking for valid session: %w", selectErr)
 		}
 
 		// If the above query returns no rows, either the session is expired, or it does not exist.
 		// To determine which and return an appropriate error, we do a second query to see if it exists
 		existsQuery := `SELECT * FROM sessions WHERE session_key = $1`
 
-		session := sesh.Session{}
+		session := domain.Session{}
 		selectAgainErr := s.db.Get(&session, existsQuery, sessionKey)
 		if selectAgainErr != nil {
 			if selectAgainErr == sql.ErrNoRows {
-				return sesh.Session{}, sesh.ErrValidSessionNotFound
+				return domain.Session{}, domain.ErrValidSessionNotFound
 			}
-			return sesh.Session{}, fmt.Errorf("Unexpected error fetching single invalid session: %w", selectAgainErr)
+			return domain.Session{}, fmt.Errorf("Unexpected error fetching single invalid session: %w", selectAgainErr)
 		}
 
 		// quick sanity check:
@@ -178,7 +119,7 @@ func (s DBStore) ExtendAndFetchSession(sessionKey string, expirationDuration tim
 			errors.New(fmt.Sprintf("For some reason, this session we could not find was not actually expired: %s", session.SessionKey))
 		}
 		// The session must have been expired, not deleted.
-		return sesh.Session{}, sesh.ErrSessionExpired
+		return domain.Session{}, domain.ErrSessionExpired
 	}
 
 	// time.Times come back from the db with no tz info, so let's set it to UTC to be safe and consistent.

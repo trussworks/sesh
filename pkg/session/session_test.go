@@ -10,8 +10,8 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
-	"github.com/trussworks/sesh"
 	"github.com/trussworks/sesh/pkg/dbstore"
+	"github.com/trussworks/sesh/pkg/domain"
 	"github.com/trussworks/sesh/pkg/mock"
 )
 
@@ -27,7 +27,7 @@ func dbURLFromEnv() string {
 	return connStr
 }
 
-func getTestStore(t *testing.T) sesh.SessionStorageService {
+func getTestStore(t *testing.T) domain.SessionStorageService {
 	t.Helper()
 
 	connStr := dbURLFromEnv()
@@ -48,7 +48,7 @@ func TestAuthExists(t *testing.T) {
 	store := getTestStore(t)
 	defer store.Close()
 
-	sessionLog := sesh.FmtLogger(true)
+	sessionLog := domain.FmtLogger(true)
 	session := NewSessionService(timeout, store, sessionLog)
 
 	session.UserDidAuthenticate("foo")
@@ -60,7 +60,7 @@ func TestLogSessionCreatedDestroyed(t *testing.T) {
 	store := getTestStore(t)
 	defer store.Close()
 
-	sessionLog := mock.NewLogRecorder(sesh.FmtLogger(true))
+	sessionLog := mock.NewLogRecorder(domain.FmtLogger(true))
 	session := NewSessionService(timeout, store, &sessionLog)
 
 	accountID := uuid.New().String()
@@ -70,7 +70,7 @@ func TestLogSessionCreatedDestroyed(t *testing.T) {
 		t.Fatal(authErr)
 	}
 
-	createMsg, logErr := sessionLog.GetOnlyMatchingMessage(sesh.SessionCreated)
+	createMsg, logErr := sessionLog.GetOnlyMatchingMessage(domain.SessionCreated)
 	if logErr != nil {
 		t.Fatal(logErr)
 	}
@@ -93,7 +93,7 @@ func TestLogSessionCreatedDestroyed(t *testing.T) {
 		t.Fatal(delErr)
 	}
 
-	delMsg, delLogErr := sessionLog.GetOnlyMatchingMessage(sesh.SessionDestroyed)
+	delMsg, delLogErr := sessionLog.GetOnlyMatchingMessage(domain.SessionDestroyed)
 	if delLogErr != nil {
 		t.Fatal(delLogErr)
 	}
@@ -112,11 +112,11 @@ func TestLogSessionCreatedDestroyed(t *testing.T) {
 	}
 
 	_, getErr := session.GetSessionIfValid(sessionKey)
-	if getErr != sesh.ErrValidSessionNotFound {
+	if getErr != domain.ErrValidSessionNotFound {
 		t.Fatal(getErr)
 	}
 
-	nonExistantMsg, logNonExistantErr := sessionLog.GetOnlyMatchingMessage(sesh.SessionDoesNotExist)
+	nonExistantMsg, logNonExistantErr := sessionLog.GetOnlyMatchingMessage(domain.SessionDoesNotExist)
 	if logNonExistantErr != nil {
 		t.Fatal(logNonExistantErr)
 	}
@@ -138,7 +138,7 @@ func TestLogSessionExpired(t *testing.T) {
 	store := getTestStore(t)
 	defer store.Close()
 
-	sessionLog := mock.NewLogRecorder(sesh.FmtLogger(true))
+	sessionLog := mock.NewLogRecorder(domain.FmtLogger(true))
 	session := NewSessionService(timeout, store, &sessionLog)
 
 	accountID := uuid.New().String()
@@ -148,7 +148,7 @@ func TestLogSessionExpired(t *testing.T) {
 		t.Fatal(authErr)
 	}
 
-	logCreateMsg, logCreateErr := sessionLog.GetOnlyMatchingMessage(sesh.SessionCreated)
+	logCreateMsg, logCreateErr := sessionLog.GetOnlyMatchingMessage(domain.SessionCreated)
 	if logCreateErr != nil {
 		t.Fatal(logCreateErr)
 	}
@@ -158,11 +158,11 @@ func TestLogSessionExpired(t *testing.T) {
 	}
 
 	_, getErr := session.GetSessionIfValid(sessionKey)
-	if getErr != sesh.ErrSessionExpired {
+	if getErr != domain.ErrSessionExpired {
 		t.Fatal("didn't get the right error back getting the expired session:", getErr)
 	}
 
-	expiredMsg, logExpiredErr := sessionLog.GetOnlyMatchingMessage(sesh.SessionExpired)
+	expiredMsg, logExpiredErr := sessionLog.GetOnlyMatchingMessage(domain.SessionExpired)
 	if logExpiredErr != nil {
 		t.Fatal(logExpiredErr)
 	}
@@ -191,7 +191,7 @@ func TestLogConcurrentSession(t *testing.T) {
 	store := getTestStore(t)
 	defer store.Close()
 
-	sessionLog := mock.NewLogRecorder(sesh.FmtLogger(true))
+	sessionLog := mock.NewLogRecorder(domain.FmtLogger(true))
 	session := NewSessionService(timeout, store, &sessionLog)
 
 	accountID := uuid.New().String()
@@ -201,7 +201,7 @@ func TestLogConcurrentSession(t *testing.T) {
 		t.Fatal(authErr)
 	}
 
-	_, logCreateErr := sessionLog.GetOnlyMatchingMessage(sesh.SessionCreated)
+	_, logCreateErr := sessionLog.GetOnlyMatchingMessage(domain.SessionCreated)
 	if logCreateErr != nil {
 		t.Fatal(logCreateErr)
 	}
@@ -212,12 +212,12 @@ func TestLogConcurrentSession(t *testing.T) {
 		t.Fatal(authAgainErr)
 	}
 
-	createMessages := sessionLog.MatchingMessages(sesh.SessionCreated)
+	createMessages := sessionLog.MatchingMessages(domain.SessionCreated)
 	if len(createMessages) != 2 {
 		t.Fatal("Should have 2 create messages now")
 	}
 
-	_, logConcurrentErr := sessionLog.GetOnlyMatchingMessage(sesh.SessionConcurrentLogin)
+	_, logConcurrentErr := sessionLog.GetOnlyMatchingMessage(domain.SessionConcurrentLogin)
 	if logConcurrentErr != nil {
 		t.Fatal(logConcurrentErr)
 	}
