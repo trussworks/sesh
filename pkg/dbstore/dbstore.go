@@ -81,8 +81,6 @@ func (s DBStore) DeleteSession(sessionKey string) error {
 // On success it returns the session
 // On failure, it can return ErrValidSessionNotFound, ErrSessionExpired, or an unexpected error
 func (s DBStore) ExtendAndFetchSession(sessionKey string, expirationDuration time.Duration) (domain.Session, error) {
-	fmt.Println("Fetching", sessionKey)
-
 	expirationDate := time.Now().UTC().Add(expirationDuration)
 
 	// We update the session expiration date to be $DURATION from now and fetch the account and the session.

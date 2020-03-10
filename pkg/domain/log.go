@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+// errors
 var (
 	// ErrValidSessionNotFound is returned when a valid session is not found
 	ErrValidSessionNotFound = errors.New("Valid session not found")
