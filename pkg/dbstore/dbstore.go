@@ -2,11 +2,11 @@ package dbstore
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
 
 	"github.com/trussworks/sesh/pkg/domain"
 )

@@ -4,11 +4,11 @@ import (
 	"crypto/sha512"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/gorilla/securecookie"
-	"github.com/pkg/errors"
 
 	"github.com/trussworks/sesh/pkg/domain"
 )
