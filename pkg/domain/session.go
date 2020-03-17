@@ -2,7 +2,7 @@ package domain
 
 import "time"
 
-// Session contains all the information about a given user session in eApp
+// Session contains all the information about a given user session
 type Session struct {
 	AccountID      string    `db:"account_id"`
 	SessionKey     string    `db:"session_key"`
