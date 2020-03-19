@@ -66,7 +66,7 @@ To protect a route with sesh, add the sesh middleware to it.
 	protectedRoutes.Use(sessions.AuthenticationMiddleware())
 ```
 
-The middleware will grab the sesh cookie from the request, check that the session with that ID is valid, and add the Session struct to the context. If any part of that fails, it will log, write an error to the response, and not call any futher http handlers.
+The middleware will grab the sesh cookie from the request, check that the session with that ID is valid, and add the Session struct to the context. If any part of that fails, it will log, write an error to the response, and not call any further http handlers.
 
 ### Extracting the session id inside protected handlers
 
