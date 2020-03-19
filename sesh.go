@@ -1,4 +1,4 @@
-// Package sesh is a session managment library written in Go.
+// Package sesh is a session management library written in Go.
 // It uses a postgres table to track current sessions and their expiration,
 // and it logs all session lifecycle events.
 package sesh

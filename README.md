@@ -98,7 +98,7 @@ When someone logs out, you can end a session thusly:
 
 This will check the sesh cookie in the request, and end the session.
 
-NOTE: while your login handler must _not_ be proteted by the AuthenticationMiddleware, your logout handler _must_ be protected so.
+NOTE: while your login handler must _not_ be protected by the AuthenticationMiddleware, your logout handler _must_ be protected so.
 
 ## Lineage
 
