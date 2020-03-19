@@ -2,7 +2,7 @@
 
 If you are interested in using or contributing to sesh, let us know! sesh@truss.works
 
-We welcome contributions to sesh. Please feel free to submit focused PRs, and feel free to open issues first to discuss ideas first, if you like. This repository is goverened by the [Contributor Covenant](CODE_OF_CONDUCT.md)
+We welcome contributions to sesh. Please feel free to submit focused PRs, and feel free to open issues first to discuss ideas first, if you like. This repository is governed by the [Contributor Covenant](CODE_OF_CONDUCT.md)
 
 ## Dev Setup
 
@@ -19,7 +19,7 @@ replace github.com/trussworks/sesh => ../sesh
 
 ## Package layout
 
-The `sesh` package is meant to be the main interface to sesh. Thre are four packages used by the top level package.
+The `sesh` package is meant to be the main interface to sesh. There are four packages used by the top level package.
 
 - `pkg/domain` is home to all the types and interfaces that are used in common by the packages.
 - `pkg/dbstore` is the postgres db implementation.
