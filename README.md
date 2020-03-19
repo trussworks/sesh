@@ -37,7 +37,7 @@ There are 5 places in your code where you need to interact with sesh once it's c
 
 ### Login
 
-When a user sucessfully authenticates, wether via username/password, oauth, client certs, etc. Create a new login and set the HttpOnly cookie like so:
+When a user successfully authenticates (whether via username/password, OAuth, client certs, etc.), create a new login and set the HttpOnly cookie like so:
 
 ```
     // With a valid accountID, we can begin a session.
