@@ -70,7 +70,7 @@ The middleware will grab the sesh cookie from the request, check that the sessio
 
 ### Extracting the session id inside protected handlers
 
-Inside your protected handers, you can access the current Session object from the context to get the AccountID that the session belongs to.
+Inside your protected handlers, you can access the current Session object from the context to get the AccountID that the session belongs to.
 
 ```
 func (r *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
