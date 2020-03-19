@@ -1,6 +1,6 @@
 # Sesh
 
-Sesh is a session managment library written in Go. It uses a postgres table to track current sessions and their expiration, and it logs all session lifecycle events. It was created to fulfil the following requirements:
+Sesh is a session management library written in Go. It uses a postgres table to track current sessions and their expiration, and it logs all session lifecycle events. It was created to fulfill the following requirements:
 
 1. Sessions can be ended server-side, immediately rejecting all further requests from that session
 2. Only one session can be active at a time, if you login while you have a session active the old one will be ended.
