@@ -56,7 +56,7 @@ func (r *LogRecorder) Info(message string, fields domain.LogFields) {
 }
 
 // AddField adds new fields to LogRecorder's globals field
-func (r *LogRecorder) AddField(name string, value interface{}) {
+func (r *LogRecorder) AddField(name string, value string) {
 	if r.globals == nil {
 		r.globals = domain.LogFields{}
 	}

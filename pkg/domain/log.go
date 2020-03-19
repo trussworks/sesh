@@ -29,7 +29,7 @@ var (
 )
 
 // Temporary logging stuff. we should turn this into a callback.
-type LogFields map[string]interface{}
+type LogFields map[string]string
 
 type LogService interface {
 	Info(message string, fields LogFields)

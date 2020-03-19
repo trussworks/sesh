@@ -61,7 +61,7 @@ func (s Service) UserDidAuthenticate(accountID string) (string, error) {
 	if fetchErr != nil && fetchErr != sql.ErrNoRows {
 		return "", fetchErr
 	}
-	// Then, if we sucessfully got a session back, deal with that. If we got ErrNoRows, we just want to skip this part.
+	// Then, if we successfully got a session back, deal with that. If we got ErrNoRows, we just want to skip this part.
 	if fetchErr == nil {
 		if extantSession.ExpirationDate.Before(time.Now().UTC()) {
 			// If the session is expired, delete it.

@@ -107,21 +107,24 @@ type authContextKey string
 
 const sessionKey authContextKey = "SESSION"
 
-// SetSessionInRequestContext modifies the request's Context() to add the Account
+// SetSessionInRequestContext modifies the request's Context() to add the Session
 func SetSessionInRequestContext(r *http.Request, session domain.Session) context.Context {
-	sessionContext := context.WithValue(r.Context(), sessionKey, session)
-
-	return sessionContext
+	return SetSessionInContext(r.Context(), session)
 }
 
-// SessionFromRequestContext gets the reference to the Account stored in the request.Context()
+// SetSessionInContext modifies the given context to add the Session
+func SetSessionInContext(ctx context.Context, session domain.Session) context.Context {
+	return context.WithValue(ctx, sessionKey, session)
+}
+
+// SessionFromRequestContext gets the reference to the Session stored in the request.Context()
 func SessionFromRequestContext(r *http.Request) domain.Session {
 	// This will panic if it is not set or if it's not a Session. That will always be a programmer
 	// error so I think that it's worth the tradeoff for the simpler method signature.
 	return SessionFromContext(r.Context())
 }
 
-// SessionFromContext gets the reference to the Account stored in the request.Context()
+// SessionFromContext gets the reference to the Session stored in the request.Context()
 func SessionFromContext(ctx context.Context) domain.Session {
 	// This will panic if it is not set or if it's not a Session. That will always be a programmer
 	// error so I think that it's worth the tradeoff for the simpler method signature.
