@@ -4,7 +4,7 @@ Sesh is a session management library written in Go. It uses a postgres table to 
 
 1. Sessions can be ended server-side, immediately rejecting all further requests from that session
 2. Only one session can be active at a time, if you login while you have a session active the old one will be ended.
-3. The browser stores the session in an HttpOnly cookie, minimzing the attack surface area for intercepting the session
+3. The browser stores the session in an HttpOnly cookie, minimizing the attack surface area for intercepting the session
 4. All session lifecycle events are logged: creation, destruction, reuse, and invalid requests.
 
 ## Configuration
