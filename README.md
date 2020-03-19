@@ -1,10 +1,10 @@
 # Sesh
 
-Sesh is a session managment library written in Go. It uses a postgres table to track current sessions and their expiration, and it logs all session lifecycle events. It was created to fulfil the following requirements:
+Sesh is a session management library written in Go. It uses a postgres table to track current sessions and their expiration, and it logs all session lifecycle events. It was created to fulfill the following requirements:
 
 1. Sessions can be ended server-side, immediately rejecting all further requests from that session
 2. Only one session can be active at a time, if you login while you have a session active the old one will be ended.
-3. The browser stores the session in an HttpOnly cookie, minimzing the attack surface area for intercepting the session
+3. The browser stores the session in an HttpOnly cookie, minimizing the attack surface area for intercepting the session
 4. All session lifecycle events are logged: creation, destruction, reuse, and invalid requests.
 
 ## Configuration
@@ -37,7 +37,7 @@ There are 5 places in your code where you need to interact with sesh once it's c
 
 ### Login
 
-When a user sucessfully authenticates, wether via username/password, oauth, client certs, etc. Create a new login and set the HttpOnly cookie like so:
+When a user successfully authenticates (whether via username/password, OAuth, client certs, etc.), create a new login and set the HttpOnly cookie like so:
 
 ```
     // With a valid accountID, we can begin a session.
@@ -66,11 +66,11 @@ To protect a route with sesh, add the sesh middleware to it.
 	protectedRoutes.Use(sessions.AuthenticationMiddleware())
 ```
 
-The middleware will grab the sesh cookie from the request, check that the session with that ID is valid, and add the Session struct to the context. If any part of that fails, it will log, write an error to the response, and not call any futher http handlers.
+The middleware will grab the sesh cookie from the request, check that the session with that ID is valid, and add the Session struct to the context. If any part of that fails, it will log, write an error to the response, and not call any further http handlers.
 
 ### Extracting the session id inside protected handlers
 
-Inside your protected handers, you can access the current Session object from the context to get the AccountID that the session belongs to.
+Inside your protected handlers, you can access the current Session object from the context to get the AccountID that the session belongs to.
 
 ```
 func (r *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
