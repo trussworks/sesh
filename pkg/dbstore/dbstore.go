@@ -113,7 +113,7 @@ func (s DBStore) ExtendAndFetchSession(sessionKey string, expirationDuration tim
 		}
 
 		// quick sanity check:
-		if session.ExpirationDate.After(time.Now()) {
+		if session.ExpirationDate.After(time.Now().UTC()) {
 			errors.New(fmt.Sprintf("For some reason, this session we could not find was not actually expired: %s", session.SessionKey))
 		}
 		// The session must have been expired, not deleted.

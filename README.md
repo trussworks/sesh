@@ -14,12 +14,12 @@ Sesh is a session management library written in Go. It uses a postgres table to 
 
 ```
     dbConnection, err := sqlx.Open("postgres", dbConnectionURL)
-	if err != nil {
-		return nil, fmt.Errorf("error connecting to database using sqlx.Open: %w", err)
-	}
+    if err != nil {
+        return nil, fmt.Errorf("error connecting to database using sqlx.Open: %w", err)
+    }
 
     seshLogger := AuthLogger{}
-	sessions := sesh.NewSessions(dbConnection, seshLogger, 5*time.Minute, false)
+    sessions := sesh.NewSessions(dbConnection, seshLogger, 5*time.Minute, false)
 ```
 
 There are several options, described below.
@@ -60,10 +60,10 @@ To protect a route with sesh, add the sesh middleware to it.
 ```
     router := mux.NewRouter()
     protectedRoutes := router.PathPrefix("/me").Subrouter()
-	protectedRoutes.Handle("", fetchCurrentUserHandler)
+    protectedRoutes.Handle("", fetchCurrentUserHandler)
     protectedRoutes.Handle("/dogs", fetchDogsHandler)
 
-	protectedRoutes.Use(sessions.AuthenticationMiddleware())
+    protectedRoutes.Use(sessions.AuthenticationMiddleware())
 ```
 
 The middleware will grab the sesh cookie from the request, check that the session with that ID is valid, and add the Session struct to the context. If any part of that fails, it will log, write an error to the response, and not call any further http handlers.
@@ -74,7 +74,7 @@ Inside your protected handlers, you can access the current Session object from t
 
 ```
 func (r *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	session := sesh.SessionFromContext(ctx)
+    session := sesh.SessionFromContext(ctx)
 
     user, err := fetchUserForID(session.AccountID)
     ...

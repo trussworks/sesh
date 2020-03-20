@@ -18,8 +18,8 @@ var (
 var (
 	SessionExpired                = "Auth failed because of an expired session"
 	SessionDoesNotExist           = "Auth failed because of an invalid session"
-	SessionUnexpectedError        = "An unexpected error occured while checking the session."
-	SessionCreationFailed         = "An unexpected error occured creating a session"
+	SessionUnexpectedError        = "An unexpected error occurred while checking the session."
+	SessionCreationFailed         = "An unexpected error occurred creating a session"
 	RequestIsMissingSessionCookie = "Unauthorized: Request is missing a session cookie"
 
 	SessionCreated         = "New Session Created"
