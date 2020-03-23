@@ -25,3 +25,6 @@ load_db_schema:
 
 test:
 	go test ./...
+
+test-server:
+	go run ./cmd/server

@@ -3,7 +3,6 @@ package seshttp
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/trussworks/sesh/pkg/domain"
@@ -144,7 +143,6 @@ func RespondWithStructuredError(w http.ResponseWriter, errorMessage string, code
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Println("ENCODING")
 	http.Error(w, string(jsonString), code)
 }
 

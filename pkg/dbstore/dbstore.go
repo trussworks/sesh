@@ -123,7 +123,5 @@ func (s DBStore) ExtendAndFetchSession(sessionKey string, expirationDuration tim
 	// time.Times come back from the db with no tz info, so let's set it to UTC to be safe and consistent.
 	session.ExpirationDate = session.ExpirationDate.UTC()
 
-	fmt.Printf("NO ERROR %+v\n", session)
-
 	return session, nil
 }
