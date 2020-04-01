@@ -91,15 +91,3 @@ func SessionFromContext(ctx context.Context) Session {
 	}
 	return session
 }
-
-// ContextWithTestSession is not used in the operation of sesh. It is intended to
-// be used in your tests, to mimic what AuthenticatedMiddleware does for authenticated requests.
-func ContextWithTestSession(ctx context.Context, session Session) context.Context {
-	domainSession := domain.Session{
-		AccountID:      session.AccountID,
-		SessionKey:     session.SessionKey,
-		ExpirationDate: session.ExpirationDate,
-	}
-
-	return seshttp.SetSessionInContext(ctx, domainSession)
-}
