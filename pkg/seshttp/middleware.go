@@ -72,15 +72,14 @@ func NewSessionCookieService(secure bool) SessionCookieService {
 	}
 }
 
-// AddSessionKeyToResponse adds the session cookie to a response given a valid sessionKey
-func (s SessionCookieService) AddSessionKeyToResponse(w http.ResponseWriter, sessionKey string) {
+func sessionCookie(sessionKey string, secure bool) *http.Cookie {
 	// LESSONS:
 	// The domain must be "" for localhost to work
 	// Safari will fuck up cookies if you have a .local hostname, chrome does fine
 	// Secure must be false for http to work
 
-	cookie := &http.Cookie{
-		Secure:   s.secure,
+	return &http.Cookie{
+		Secure:   secure,
 		Name:     SessionCookieName,
 		Value:    sessionKey,
 		HttpOnly: true,
@@ -88,13 +87,27 @@ func (s SessionCookieService) AddSessionKeyToResponse(w http.ResponseWriter, ses
 		// Omit MaxAge and Expires to make this a session cookie.
 		// Omit domain to default to the full domain
 	}
+}
+
+// AddSessionKeyToResponse adds the session cookie to a response given a valid sessionKey
+func (s SessionCookieService) AddSessionKeyToResponse(w http.ResponseWriter, sessionKey string) {
+
+	cookie := sessionCookie(sessionKey, s.secure)
 
 	http.SetCookie(w, cookie)
+}
 
+// AddSessionKeyToRequest adds the session cookie to a request given a valid sessionKey
+func (s SessionCookieService) AddSessionKeyToRequest(r *http.Request, sessionKey string) {
+
+	cookie := sessionCookie(sessionKey, s.secure)
+
+	r.AddCookie(cookie)
 }
 
 // DeleteSessionCookie removes the session cookie
 func DeleteSessionCookie(w http.ResponseWriter) {
+	fmt.Println("DELETING COOK!")
 	cookie := &http.Cookie{
 		Name:   SessionCookieName,
 		MaxAge: -1,
