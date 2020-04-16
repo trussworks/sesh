@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/trussworks/sesh/pkg/domain"
 )
@@ -84,6 +85,7 @@ func sessionCookie(sessionKey string, secure bool) *http.Cookie {
 		Value:    sessionKey,
 		HttpOnly: true,
 		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
 		// Omit MaxAge and Expires to make this a session cookie.
 		// Omit domain to default to the full domain
 	}
@@ -107,10 +109,13 @@ func (s SessionCookieService) AddSessionKeyToRequest(r *http.Request, sessionKey
 
 // DeleteSessionCookie removes the session cookie
 func DeleteSessionCookie(w http.ResponseWriter) {
-	fmt.Println("DELETING COOK!")
 	cookie := &http.Cookie{
 		Name:   SessionCookieName,
+		Value: "",
+		Path: "/",
 		MaxAge: -1,
+		Expires: time.Unix(1, 0),
+		HttpOnly: true,
 	}
 	http.SetCookie(w, cookie)
 }
