@@ -27,17 +27,30 @@ type UserSessions struct {
 	scs *scs.SessionManager
 }
 
+// NewUserSessions returns a configured UserSessions
 func NewUserSessions(scs *scs.SessionManager) UserSessions {
 	return UserSessions{
 		scs,
 	}
 }
 
+// userIDKey is the key used internally by sesh to track the UserID for the user
+// that is authenticated in this session
+const userIDKey = "sesh-user-id"
+
 // UserDidAuthenticate creates a new session and writes an HTTPOnly cookie to track that session
 // it returns errors
 func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser) error {
 	// got to do a bunch of stuff here.
-	s.scs.Put(ctx, "user-id", user.SeshUserID())
+
+	// Renew the session token to prevent session fixation attacks on auth change
+	err := s.scs.RenewToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Put the user ID into the session to track which user authenticated here
+	s.scs.Put(ctx, userIDKey, user.SeshUserID())
 
 	return nil
 }
@@ -49,8 +62,8 @@ func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Checking On Protecting")
 
-		// First, determine if a usersession has been created by looking for UserID.
-		userID := s.scs.GetString(r.Context(), "user-id")
+		// First, determine if a user session has been created by looking for the user ID.
+		userID := s.scs.GetString(r.Context(), userIDKey)
 
 		if userID == "" {
 			// userID is set by UserDidLogin, it being unset means there is no user session active.
@@ -77,7 +90,14 @@ func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
 func (s UserSessions) UserDidLogout(ctx context.Context) error {
 	// gotta call the thingamigger
 
-	s.scs.Remove(ctx, "user-id")
+	// Renew the session token to prevent session fixation attacks on auth change
+	err := s.scs.RenewToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Remove the user id from the session to indicate that the session is unauthenticated.
+	s.scs.Remove(ctx, userIDKey)
 
 	return nil
 }
