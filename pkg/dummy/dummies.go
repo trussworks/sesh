@@ -1,4 +1,4 @@
-package scsstore
+package dummy
 
 import (
 	"database/sql"
@@ -11,6 +11,8 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+
+	"github.com/trussworks/sesh"
 )
 
 type appUser struct {
@@ -41,7 +43,7 @@ func fetchUserByUsername(db *sqlx.DB, username string) (appUser, error) {
 	return user, nil
 }
 
-func loginEndpoint(db *sqlx.DB, us UserSessions) func(w http.ResponseWriter, r *http.Request) {
+func loginEndpoint(db *sqlx.DB, us sesh.UserSessions) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("LOGINGIN")
@@ -82,7 +84,7 @@ func protectedEndpoint(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("PROTECTED")
 }
 
-func logoutEndpoint(us UserSessions) func(w http.ResponseWriter, r *http.Request) {
+func logoutEndpoint(us sesh.UserSessions) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Logging OUT")
 
@@ -114,7 +116,7 @@ func setupMux(db *sqlx.DB) http.Handler {
 	mux := http.NewServeMux()
 
 	sessionManager := scs.New()
-	userSessions := UserSessions{db: nil, scs: sessionManager}
+	userSessions := sesh.NewUserSessions(sessionManager)
 
 	protectedMiddleware := userSessions.ProtectedMiddleware
 

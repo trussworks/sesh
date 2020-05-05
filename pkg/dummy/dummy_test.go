@@ -1,4 +1,4 @@
-package scsstore
+package dummy
 
 import (
 	"crypto/rand"

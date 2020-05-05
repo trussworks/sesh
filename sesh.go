@@ -5,89 +5,79 @@ package sesh
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"time"
 
-	"github.com/jmoiron/sqlx"
-
-	"github.com/trussworks/sesh/pkg/dbstore"
-	"github.com/trussworks/sesh/pkg/domain"
-	"github.com/trussworks/sesh/pkg/seshttp"
-	"github.com/trussworks/sesh/pkg/session"
+	"github.com/alexedwards/scs/v2"
 )
 
-// Sessions manage browser sessions with a db table and logs all significant lifecycle events
-type Sessions struct {
-	session    domain.SessionService
-	middleware *seshttp.SessionMiddleware
-	cookie     seshttp.SessionCookieService
+func hello() {
+	manager := scs.New()
+
+	fmt.Println("HI", manager)
 }
 
-// NewSessions returns a configured Sessions, taking an existing sqlx.DB as the first argument.
-func NewSessions(db *sqlx.DB, log domain.LogService, timeout time.Duration, useSecureCookie bool) Sessions {
-	store := dbstore.NewDBStore(db)
-	session := session.NewSessionService(timeout, store, log)
-	middleware := seshttp.NewSessionMiddleware(log, session)
-	cookie := seshttp.NewSessionCookieService(useSecureCookie)
+type SessionUser interface {
+	SeshUserID() string //-- fuuuuuu
+	SeshCurrentSessionID() string
+}
 
-	return Sessions{
-		session,
-		middleware,
-		cookie,
+// UserSessions manage User Sessions. On top of scs for browser sessions
+type UserSessions struct {
+	scs *scs.SessionManager
+}
+
+func NewUserSessions(scs *scs.SessionManager) UserSessions {
+	return UserSessions{
+		scs,
 	}
-}
-
-// Session contains all the information about a given user session
-// This type is inserted into the context by the AuthenticationMiddleware
-type Session struct {
-	AccountID      string
-	SessionKey     string
-	ExpirationDate time.Time
 }
 
 // UserDidAuthenticate creates a new session and writes an HTTPOnly cookie to track that session
 // it returns errors
-func (s Sessions) UserDidAuthenticate(w http.ResponseWriter, accountID string) (sessionKey string, err error) {
-	sessionKey, authErr := s.session.UserDidAuthenticate(accountID)
-	if authErr != nil {
-		return "", authErr
-	}
-
-	s.cookie.AddSessionKeyToResponse(w, sessionKey)
-
-	return sessionKey, nil
-}
-
-// UserDidLogout destroys the session and removes the session cookie.
-// it returns errors
-func (s Sessions) UserDidLogout(w http.ResponseWriter, r *http.Request) error {
-	session := seshttp.SessionFromRequestContext(r)
-
-	logoutErr := s.session.UserDidLogout(session.SessionKey)
-	if logoutErr != nil {
-		return logoutErr
-	}
-
-	seshttp.DeleteSessionCookie(w)
+func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser) error {
+	// got to do a bunch of stuff here.
+	s.scs.Put(ctx, "user-id", user.SeshUserID())
 
 	return nil
 }
 
-// AuthenticationMiddleware reads the session cookie and verifies that the request is being made by someone with a valid session
+// ProtectedMiddleware reads the session cookie and verifies that the request is being made by someone with a valid session
 // It then stores the current session in the context, which can be retrieved with SessionFromContext(ctx)
 // If the session is invalid it responds with an error and does not call any further handlers.
-func (s Sessions) AuthenticationMiddleware() func(http.Handler) http.Handler {
-	return s.middleware.Middleware
+func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Checking On Protecting")
+
+		// First, determine if a usersession has been created by looking for UserID.
+		userID := s.scs.GetString(r.Context(), "user-id")
+
+		if userID == "" {
+			// userID is set by UserDidLogin, it being unset means there is no user session active.
+			// In this case, an unauthenticated request has been made.
+
+			// TODO: log it?
+			// TODO: call error handler.
+			fmt.Println("UNAUTHORIZED REQUEST MADE")
+			http.Error(w, "UNAUTHORIZED", http.StatusUnauthorized)
+			return
+		}
+
+		// fetch the user with that ID.
+
+		// next, check that the session id is current for the use
+		// BLERG. Gotta get the current token somehow.
+
+		next.ServeHTTP(w, r)
+	})
 }
 
-// SessionFromContext pulls the current sesh.Session object out of the context
-// This function is all that is required in your handlers to get the current session information
-func SessionFromContext(ctx context.Context) Session {
-	domainSession := seshttp.SessionFromContext(ctx)
-	session := Session{
-		AccountID:      domainSession.AccountID,
-		SessionKey:     domainSession.SessionKey,
-		ExpirationDate: domainSession.ExpirationDate,
-	}
-	return session
+// UserDidLogout destroys the user session and removes the session cookie.
+// it returns errors
+func (s UserSessions) UserDidLogout(ctx context.Context) error {
+	// gotta call the thingamigger
+
+	s.scs.Remove(ctx, "user-id")
+
+	return nil
 }
