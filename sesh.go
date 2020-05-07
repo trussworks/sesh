@@ -5,10 +5,13 @@ package sesh
 
 import (
 	"context"
+	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 
 	"github.com/alexedwards/scs/v2"
+	"github.com/trussworks/sesh/pkg/logger"
 )
 
 func hello() {
@@ -24,19 +27,55 @@ type SessionUser interface {
 
 // UserSessions manage User Sessions. On top of scs for browser sessions
 type UserSessions struct {
-	scs *scs.SessionManager
+	scs    *scs.SessionManager
+	logger EventLogger
 }
 
 // NewUserSessions returns a configured UserSessions
-func NewUserSessions(scs *scs.SessionManager) UserSessions {
-	return UserSessions{
+func NewUserSessions(scs *scs.SessionManager, options ...Option) (UserSessions, error) {
+
+	sessions := UserSessions{
 		scs,
+		logger.NewPrintLogger(),
+	}
+
+	for _, option := range options {
+		err := option(&sessions)
+		if err != nil {
+			return UserSessions{}, err
+		}
+	}
+
+	return sessions, nil
+}
+
+type EventLogger interface {
+	LogSeshEvent(message string, metadata map[string]string)
+}
+
+type Option func(*UserSessions) error
+
+func CustomLogger(logger EventLogger) Option {
+	return func(userSessions *UserSessions) error {
+		userSessions.logger = logger
+		return nil
 	}
 }
 
 // userIDKey is the key used internally by sesh to track the UserID for the user
 // that is authenticated in this session
 const userIDKey = "sesh-user-id"
+
+const (
+	sessionCreatedMessage = "New User Session Created"
+	sessionDeletedMessage = "User Session Destroyed"
+)
+
+func hashSessionKey(sessionKey string) string {
+	hashed := sha512.Sum512([]byte(sessionKey))
+	hexEncoded := hex.EncodeToString(hashed[:])
+	return hexEncoded[:12]
+}
 
 // UserDidAuthenticate creates a new session and writes an HTTPOnly cookie to track that session
 // it returns errors
@@ -46,11 +85,20 @@ func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser)
 	// Renew the session token to prevent session fixation attacks on auth change
 	err := s.scs.RenewToken(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to renew the token for login: %w", err)
 	}
 
 	// Put the user ID into the session to track which user authenticated here
 	s.scs.Put(ctx, userIDKey, user.SeshUserID())
+
+	// force SCS to commit the session now, this will ensure that the session has been created and give us the session ID.
+	sessionID, _, err := s.scs.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("Failed to write new user session to store: %w", err)
+	}
+
+	// Log the created session.
+	s.logger.LogSeshEvent(sessionCreatedMessage, map[string]string{"session_id_hash": hashSessionKey(sessionID)})
 
 	return nil
 }
@@ -98,6 +146,11 @@ func (s UserSessions) UserDidLogout(ctx context.Context) error {
 
 	// Remove the user id from the session to indicate that the session is unauthenticated.
 	s.scs.Remove(ctx, userIDKey)
+
+	// Probably go ahead and force the deletion to happen now, too.
+
+	// Log the created session.
+	s.logger.LogSeshEvent(sessionDeletedMessage, map[string]string{"session_id_hash": "some_hash_i_think"})
 
 	return nil
 }

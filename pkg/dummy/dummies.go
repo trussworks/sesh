@@ -116,7 +116,10 @@ func setupMux(db *sqlx.DB) http.Handler {
 	mux := http.NewServeMux()
 
 	sessionManager := scs.New()
-	userSessions := sesh.NewUserSessions(sessionManager)
+	userSessions, err := sesh.NewUserSessions(sessionManager)
+	if err != nil {
+		panic(err)
+	}
 
 	protectedMiddleware := userSessions.ProtectedMiddleware
 

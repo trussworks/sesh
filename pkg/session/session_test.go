@@ -1,3 +1,5 @@
+// +build skip
+
 package session
 
 import (

@@ -13,14 +13,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func handleRequest(server http.Handler, request *http.Request) *http.Response {
-	w := httptest.NewRecorder()
-
-	server.ServeHTTP(w, request)
-
-	return w.Result()
-}
-
 // returns username
 func newTestUserName(t *testing.T, db *sqlx.DB) string {
 
@@ -111,5 +103,4 @@ func TestFlow(t *testing.T) {
 		t.Fatal("Final request should have failed!")
 	}
 
-	t.Fatal("dummy.")
 }
