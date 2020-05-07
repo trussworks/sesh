@@ -104,3 +104,91 @@ func TestFlow(t *testing.T) {
 	}
 
 }
+
+func TestConcurrentLogin(t *testing.T) {
+
+	connStr := dbURLFromEnv()
+	db, err := sqlx.Open("postgres", connStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testUsername := newTestUserName(t, db)
+
+	testServer := httptest.NewServer(setupMux(db))
+	defer testServer.Close()
+
+	firstJar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstClient := &http.Client{Jar: firstJar}
+
+	secondJar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondClient := &http.Client{Jar: secondJar}
+
+	// First Login
+	loginResp, err := firstClient.Post(testServer.URL+"/login", "http/txt", strings.NewReader(testUsername))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if loginResp.StatusCode != 201 {
+		t.Fatal("LoginFailed")
+	}
+
+	// Make the protected request
+	allowedR, err := firstClient.Get(testServer.URL + "/protected")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if allowedR.StatusCode != 200 {
+		t.Fatal("First request should have succeeded!")
+	}
+
+	// Second Login
+	loginResp2, err := secondClient.Post(testServer.URL+"/login", "http/txt", strings.NewReader(testUsername))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if loginResp2.StatusCode != 201 {
+		t.Fatal("LoginFailed")
+	}
+
+	// Make the protected request with the second session
+	allowedR2, err := secondClient.Get(testServer.URL + "/protected")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if allowedR2.StatusCode != 200 {
+		t.Fatal("Second request should have succeeded!")
+	}
+
+	// The first session should no longer be valid.
+	disallowedR, err := firstClient.Get(testServer.URL + "/protected")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if disallowedR.StatusCode != 401 {
+		t.Log("The first session should no longer be valid!")
+		t.Fail()
+	}
+
+	// Make the protected request with the second session, again. Should still be valid.
+	allowedR3, err := secondClient.Get(testServer.URL + "/protected")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if allowedR3.StatusCode != 200 {
+		t.Fatal("Second request should have succeeded!")
+	}
+
+}

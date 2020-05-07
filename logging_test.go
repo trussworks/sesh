@@ -24,16 +24,23 @@ func (u testUser) SeshCurrentSessionID() string {
 
 func TestLogSessionCreated(t *testing.T) {
 
+	var user testUser
+
+	updateFn := func(u SessionUser, currentID string) error {
+		user.currentSessionID = currentID
+		return nil
+	}
+
 	// setup a userSessions
 	sessionManager := scs.New()
 	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
-	userSessions, err := NewUserSessions(sessionManager, CustomLogger(&logRecorder))
+	userSessions, err := NewUserSessions(sessionManager, updateFn, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// create a user to authenticate
-	user := testUser{
+	user = testUser{
 		id:               "42",
 		username:         "Some Pig",
 		currentSessionID: "",
@@ -67,16 +74,23 @@ func TestLogSessionCreated(t *testing.T) {
 
 func TestLogSessionDestroyed(t *testing.T) {
 
+	var user testUser
+
+	updateFn := func(u SessionUser, currentID string) error {
+		user.currentSessionID = currentID
+		return nil
+	}
+
 	// setup a userSessions
 	sessionManager := scs.New()
 	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
-	userSessions, err := NewUserSessions(sessionManager, CustomLogger(&logRecorder))
+	userSessions, err := NewUserSessions(sessionManager, updateFn, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// create a user to authenticate
-	user := testUser{
+	user = testUser{
 		id:               "42",
 		username:         "Some Pig",
 		currentSessionID: "",

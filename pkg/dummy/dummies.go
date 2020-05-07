@@ -43,6 +43,21 @@ func fetchUserByUsername(db *sqlx.DB, username string) (appUser, error) {
 	return user, nil
 }
 
+func updateUserDelegate(db *sqlx.DB) sesh.UserUpdateDelegate {
+	return func(u sesh.SessionUser, currentID string) error {
+		fmt.Println("SAVING NEW DEALIE")
+
+		updateQuery := `UPDATE users SET current_session_id=$1 WHERE id=$2`
+
+		_, err := db.Exec(updateQuery, currentID, u.SeshUserID())
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
 func loginEndpoint(db *sqlx.DB, us sesh.UserSessions) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -115,8 +130,10 @@ func dbURLFromEnv() string {
 func setupMux(db *sqlx.DB) http.Handler {
 	mux := http.NewServeMux()
 
+	updateFn := updateUserDelegate(db)
+
 	sessionManager := scs.New()
-	userSessions, err := sesh.NewUserSessions(sessionManager)
+	userSessions, err := sesh.NewUserSessions(sessionManager, updateFn)
 	if err != nil {
 		panic(err)
 	}

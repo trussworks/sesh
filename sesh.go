@@ -27,16 +27,21 @@ type SessionUser interface {
 
 // UserSessions manage User Sessions. On top of scs for browser sessions
 type UserSessions struct {
-	scs    *scs.SessionManager
-	logger EventLogger
+	scs          *scs.SessionManager
+	logger       EventLogger
+	userUpdateFn UserUpdateDelegate
 }
 
+// UserUpdateDelegate is the function that will be called to update an implementors user with the current session ID
+type UserUpdateDelegate func(user SessionUser, currentID string) error
+
 // NewUserSessions returns a configured UserSessions
-func NewUserSessions(scs *scs.SessionManager, options ...Option) (UserSessions, error) {
+func NewUserSessions(scs *scs.SessionManager, userUpdateFn UserUpdateDelegate, options ...Option) (UserSessions, error) {
 
 	sessions := UserSessions{
 		scs,
 		logger.NewPrintLogger(),
+		userUpdateFn,
 	}
 
 	for _, option := range options {
@@ -97,6 +102,24 @@ func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser)
 		return fmt.Errorf("Failed to write new user session to store: %w", err)
 	}
 
+	// Check to see if sessionID is set on the user, presently
+	if user.SeshCurrentSessionID() != "" {
+
+		// We need to delete the extant session.
+		err := s.scs.Store.Delete(user.SeshCurrentSessionID())
+		if err != nil {
+			// TODO, should we delete the new session?
+			return fmt.Errorf("Error deleting a previous session on login: %w", err)
+		}
+	}
+
+	// Save the current session ID on the user
+	err = s.userUpdateFn(user, sessionID)
+	if err != nil {
+		// TODO, Should we tear down the scs session for this? probably. It won't work I think.
+		return fmt.Errorf("Error in user update delegate: %w", err)
+	}
+
 	// Log the created session.
 	s.logger.LogSeshEvent(sessionCreatedMessage, map[string]string{"session_id_hash": hashSessionKey(sessionID)})
 
@@ -125,6 +148,7 @@ func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
 		}
 
 		// fetch the user with that ID.
+		// SO, INTERESTING, maybe we don't need to do this anymore? We are getting this on login instead...
 
 		// next, check that the session id is current for the use
 		// BLERG. Gotta get the current token somehow.
