@@ -44,12 +44,12 @@ func fetchUserByUsername(db *sqlx.DB, username string) (appUser, error) {
 }
 
 func updateUserDelegate(db *sqlx.DB) sesh.UserUpdateDelegate {
-	return func(u sesh.SessionUser, currentID string) error {
+	return func(userID string, currentID string) error {
 		fmt.Println("SAVING NEW DEALIE")
 
 		updateQuery := `UPDATE users SET current_session_id=$1 WHERE id=$2`
 
-		_, err := db.Exec(updateQuery, currentID, u.SeshUserID())
+		_, err := db.Exec(updateQuery, currentID, userID)
 		if err != nil {
 			return err
 		}

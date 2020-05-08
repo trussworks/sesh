@@ -33,7 +33,7 @@ type UserSessions struct {
 }
 
 // UserUpdateDelegate is the function that will be called to update an implementors user with the current session ID
-type UserUpdateDelegate func(user SessionUser, currentID string) error
+type UserUpdateDelegate func(userID string, currentID string) error
 
 // NewUserSessions returns a configured UserSessions
 func NewUserSessions(scs *scs.SessionManager, userUpdateFn UserUpdateDelegate, options ...Option) (UserSessions, error) {
@@ -67,6 +67,10 @@ func CustomLogger(logger EventLogger) Option {
 	}
 }
 
+type seshContextKey string
+
+const userContextKey seshContextKey = "user-context-key"
+
 // userIDKey is the key used internally by sesh to track the UserID for the user
 // that is authenticated in this session
 const userIDKey = "sesh-user-id"
@@ -74,6 +78,9 @@ const userIDKey = "sesh-user-id"
 const (
 	sessionCreatedMessage = "New User Session Created"
 	sessionDeletedMessage = "User Session Destroyed"
+
+	expiredLoginMessage    = "Previous session expired"
+	concurrentLoginMessage = "User logged in with a concurrent active session"
 )
 
 func hashSessionKey(sessionKey string) string {
@@ -104,17 +111,30 @@ func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser)
 
 	// Check to see if sessionID is set on the user, presently
 	if user.SeshCurrentSessionID() != "" {
+		fmt.Println("DID WE")
 
-		// We need to delete the extant session.
-		err := s.scs.Store.Delete(user.SeshCurrentSessionID())
+		// Lookup the old session that wasn't logged out
+		_, exists, err := s.scs.Store.Find(user.SeshCurrentSessionID())
 		if err != nil {
-			// TODO, should we delete the new session?
-			return fmt.Errorf("Error deleting a previous session on login: %w", err)
+			return fmt.Errorf("Error loading previous session: %w", err)
+		}
+
+		if !exists {
+			s.logger.LogSeshEvent(expiredLoginMessage, map[string]string{"session_id_hash": hashSessionKey(user.SeshCurrentSessionID())})
+		} else {
+			s.logger.LogSeshEvent(concurrentLoginMessage, map[string]string{"session_id_hash": hashSessionKey(user.SeshCurrentSessionID())})
+
+			// We need to delete the concurrent session.
+			err := s.scs.Store.Delete(user.SeshCurrentSessionID())
+			if err != nil {
+				// TODO, should we delete the new session?
+				return fmt.Errorf("Error deleting a previous session on login: %w", err)
+			}
 		}
 	}
 
 	// Save the current session ID on the user
-	err = s.userUpdateFn(user, sessionID)
+	err = s.userUpdateFn(user.SeshUserID(), sessionID)
 	if err != nil {
 		// TODO, Should we tear down the scs session for this? probably. It won't work I think.
 		return fmt.Errorf("Error in user update delegate: %w", err)
@@ -165,13 +185,24 @@ func (s UserSessions) UserDidLogout(ctx context.Context) error {
 	// Renew the session token to prevent session fixation attacks on auth change
 	err := s.scs.RenewToken(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to renew the token: %w", err)
 	}
 
 	// Remove the user id from the session to indicate that the session is unauthenticated.
-	s.scs.Remove(ctx, userIDKey)
+	userID := s.scs.PopString(ctx, userIDKey)
 
-	// Probably go ahead and force the deletion to happen now, too.
+	// TODO: Probably go ahead and force the deletion to happen now, too. save it?
+
+	// user, ok := ctx.Value(userContextKey).(SessionUser)
+	// if !ok {
+	// 	return fmt.Errorf("the User was not in the context, it should have been put there by the protected middleware")
+	// }
+
+	// Update the user to drop currentsessionid
+	err = s.userUpdateFn(userID, "")
+	if err != nil {
+		return fmt.Errorf("Failed to reset logged out user's session ID: %w", err)
+	}
 
 	// Log the created session.
 	s.logger.LogSeshEvent(sessionDeletedMessage, map[string]string{"session_id_hash": "some_hash_i_think"})
