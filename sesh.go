@@ -14,12 +14,7 @@ import (
 	"github.com/trussworks/sesh/pkg/logger"
 )
 
-func hello() {
-	manager := scs.New()
-
-	fmt.Println("HI", manager)
-}
-
+// SessionUser is an interface you can implement on your user that allows Sesh to limit you to a single concurrent session
 type SessionUser interface {
 	SeshUserID() string //-- fuuuuuu
 	SeshCurrentSessionID() string
@@ -29,19 +24,25 @@ type SessionUser interface {
 type UserSessions struct {
 	scs          *scs.SessionManager
 	logger       EventLogger
-	userUpdateFn UserUpdateDelegate
+	userDelegate UserDelegate
 }
 
-// UserUpdateDelegate is the function that will be called to update an implementors user with the current session ID
+// UserUpdateDelegate is the function signature that will be called to update an implementors user with the current session ID
 type UserUpdateDelegate func(userID string, currentID string) error
 
+// UserDelegate is an implementor provided delegate for managing session IDs on your users
+type UserDelegate interface {
+	FetchUserByID(id string) (SessionUser, error)
+	UpdateUser(user SessionUser, currentSessionID string) error
+}
+
 // NewUserSessions returns a configured UserSessions
-func NewUserSessions(scs *scs.SessionManager, userUpdateFn UserUpdateDelegate, options ...Option) (UserSessions, error) {
+func NewUserSessions(scs *scs.SessionManager, userDelegate UserDelegate, options ...Option) (UserSessions, error) {
 
 	sessions := UserSessions{
 		scs,
 		logger.NewPrintLogger(),
-		userUpdateFn,
+		userDelegate,
 	}
 
 	for _, option := range options {
@@ -67,8 +68,10 @@ func CustomLogger(logger EventLogger) Option {
 	}
 }
 
+// You should always make a custom type for context keys
 type seshContextKey string
 
+// userContextKey is the key for storing a user in the context
 const userContextKey seshContextKey = "user-context-key"
 
 // userIDKey is the key used internally by sesh to track the UserID for the user
@@ -134,7 +137,7 @@ func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser)
 	}
 
 	// Save the current session ID on the user
-	err = s.userUpdateFn(user.SeshUserID(), sessionID)
+	err = s.userDelegate.UpdateUser(user, sessionID)
 	if err != nil {
 		// TODO, Should we tear down the scs session for this? probably. It won't work I think.
 		return fmt.Errorf("Error in user update delegate: %w", err)
@@ -170,11 +173,39 @@ func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
 		// fetch the user with that ID.
 		// SO, INTERESTING, maybe we don't need to do this anymore? We are getting this on login instead...
 
-		// next, check that the session id is current for the use
-		// BLERG. Gotta get the current token somehow.
+		// IF deletion failed though, we gotta check, right? b/c otherwise that session would just hang out
+		// valid when it's explicitly not anymore. This is why we check on every load.
+		user, err := s.userDelegate.FetchUserByID(userID)
+		if err != nil {
+			// TODO: log it?
+			// TODO: call error handler.
+			fmt.Println("Couldn't find user", err)
+			http.Error(w, "SERVER_ERROR", http.StatusInternalServerError)
+			return
+		}
 
-		next.ServeHTTP(w, r)
+		// // next, check that the session id is current for the use
+		// // BLERG. Gotta get the current token somehow.
+		// if user.SeshCurrentSessionID() != "FUUUUU" {
+		// 	// TODO: log it?
+		// 	// TODO: call error handler.
+		// 	fmt.Println("OLD SESSION MADE REQUEST")
+		// 	http.Error(w, "UNAUTHORIZED", http.StatusUnauthorized)
+		// 	return
+		// }
+
+		userContext := context.WithValue(r.Context(), userContextKey, user)
+		userReq := r.WithContext(userContext)
+
+		next.ServeHTTP(w, userReq)
 	})
+}
+
+// UserFromContext returns the SessionUser that the protected middleware stored in the context.
+// It will be the same user that the FetchUserByID delegate method returned, so you can safely cast
+// it to your native user type.
+func UserFromContext(ctx context.Context) SessionUser {
+	return ctx.Value(userContextKey).(SessionUser)
 }
 
 // UserDidLogout destroys the user session and removes the session cookie.
@@ -189,22 +220,23 @@ func (s UserSessions) UserDidLogout(ctx context.Context) error {
 	}
 
 	// Remove the user id from the session to indicate that the session is unauthenticated.
-	userID := s.scs.PopString(ctx, userIDKey)
+	s.scs.Remove(ctx, userIDKey)
 
 	// TODO: Probably go ahead and force the deletion to happen now, too. save it?
 
-	// user, ok := ctx.Value(userContextKey).(SessionUser)
-	// if !ok {
-	// 	return fmt.Errorf("the User was not in the context, it should have been put there by the protected middleware")
-	// }
+	// Update the users's currentSessionID
+	user, ok := ctx.Value(userContextKey).(SessionUser)
+	if !ok {
+		return fmt.Errorf("the User was not in the context, it should have been put there by the protected middleware")
+	}
 
 	// Update the user to drop currentsessionid
-	err = s.userUpdateFn(userID, "")
+	err = s.userDelegate.UpdateUser(user, "")
 	if err != nil {
 		return fmt.Errorf("Failed to reset logged out user's session ID: %w", err)
 	}
 
-	// Log the created session.
+	// Log the deleted session.
 	s.logger.LogSeshEvent(sessionDeletedMessage, map[string]string{"session_id_hash": "some_hash_i_think"})
 
 	return nil

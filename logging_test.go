@@ -24,23 +24,34 @@ func (u testUser) SeshCurrentSessionID() string {
 	return u.CurrentSessionID
 }
 
+type testUserDelegate struct {
+	user *testUser
+}
+
+func (d testUserDelegate) FetchUserByID(id string) (SessionUser, error) {
+	return nil, nil
+}
+
+func (d testUserDelegate) UpdateUser(user SessionUser, currentSessionID string) error {
+	if user.SeshUserID() != d.user.ID {
+		return errors.New("BAD User ID")
+	}
+
+	d.user.CurrentSessionID = currentSessionID
+	return nil
+}
+
 func TestLogSessionCreated(t *testing.T) {
 
 	var user testUser
-
-	updateFn := func(userID string, currentID string) error {
-		if userID != user.ID {
-			return errors.New("BAD User ID")
-		}
-
-		user.CurrentSessionID = currentID
-		return nil
+	delegate := testUserDelegate{
+		&user,
 	}
 
 	// setup a userSessions
 	sessionManager := scs.New()
 	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
-	userSessions, err := NewUserSessions(sessionManager, updateFn, CustomLogger(&logRecorder))
+	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,20 +92,14 @@ func TestLogSessionCreated(t *testing.T) {
 func TestLogSessionDestroyed(t *testing.T) {
 
 	var user testUser
-
-	updateFn := func(userID string, currentID string) error {
-		if userID != user.ID {
-			return errors.New("BAD User ID")
-		}
-
-		user.CurrentSessionID = currentID
-		return nil
+	delegate := testUserDelegate{
+		&user,
 	}
 
 	// setup a userSessions
 	sessionManager := scs.New()
 	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
-	userSessions, err := NewUserSessions(sessionManager, updateFn, CustomLogger(&logRecorder))
+	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +121,10 @@ func TestLogSessionDestroyed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidLogout(ctx)
+	// UserDidLogout depends on the middleware having run.
+	userContext := context.WithValue(ctx, userContextKey, user)
+
+	err = userSessions.UserDidLogout(userContext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,20 +148,12 @@ func TestLogSessionDestroyed(t *testing.T) {
 func TestLogConcurrentSession(t *testing.T) {
 
 	var user testUser
-
-	updateFn := func(userID string, currentID string) error {
-		if userID != user.ID {
-			return errors.New("BAD User ID")
-		}
-
-		user.CurrentSessionID = currentID
-		return nil
-	}
+	delegate := testUserDelegate{&user}
 
 	// setup a userSessions
 	sessionManager := scs.New()
 	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
-	userSessions, err := NewUserSessions(sessionManager, updateFn, CustomLogger(&logRecorder))
+	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,22 +204,14 @@ func TestLogConcurrentSession(t *testing.T) {
 func TestExpiredSession(t *testing.T) {
 
 	var user testUser
-
-	updateFn := func(userID string, currentID string) error {
-		if userID != user.ID {
-			return errors.New("BAD User ID")
-		}
-
-		user.CurrentSessionID = currentID
-		return nil
-	}
+	delegate := testUserDelegate{&user}
 
 	// setup a userSessions
 	sessionManager := scs.New()
 	sessionManager.IdleTimeout = time.Second / 2
 
 	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
-	userSessions, err := NewUserSessions(sessionManager, updateFn, CustomLogger(&logRecorder))
+	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,20 +264,12 @@ func TestExpiredSession(t *testing.T) {
 func TestLoginLogout(t *testing.T) {
 
 	var user testUser
-
-	updateFn := func(userID string, currentID string) error {
-		if userID != user.ID {
-			return errors.New("BAD User ID")
-		}
-
-		user.CurrentSessionID = currentID
-		return nil
-	}
+	delegate := testUserDelegate{&user}
 
 	// setup a userSessions
 	sessionManager := scs.New()
 	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
-	userSessions, err := NewUserSessions(sessionManager, updateFn, CustomLogger(&logRecorder))
+	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +296,10 @@ func TestLoginLogout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidLogout(firstCtx)
+	// Logout relies on the user being in the context.
+	firstUserContext := context.WithValue(firstCtx, userContextKey, user)
+
+	err = userSessions.UserDidLogout(firstUserContext)
 	if err != nil {
 		t.Fatal(err)
 	}

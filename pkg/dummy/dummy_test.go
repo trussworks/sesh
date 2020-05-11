@@ -93,7 +93,7 @@ func TestFlow(t *testing.T) {
 		t.Fatal("Logout Failed.", logoutResp.StatusCode)
 	}
 
-	// // Make the protected request a third time, it again should be rejected.
+	// Make the protected request a third time, it again should be rejected.
 	blockedAgainResp, err := client.Get(testServer.URL + "/protected")
 	if err != nil {
 		t.Fatal(err)

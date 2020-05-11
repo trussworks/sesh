@@ -43,19 +43,38 @@ func fetchUserByUsername(db *sqlx.DB, username string) (appUser, error) {
 	return user, nil
 }
 
-func updateUserDelegate(db *sqlx.DB) sesh.UserUpdateDelegate {
-	return func(userID string, currentID string) error {
-		fmt.Println("SAVING NEW DEALIE")
-
-		updateQuery := `UPDATE users SET current_session_id=$1 WHERE id=$2`
-
-		_, err := db.Exec(updateQuery, currentID, userID)
-		if err != nil {
-			return err
-		}
-
-		return nil
+func fetchUserByID(db *sqlx.DB, id string) (appUser, error) {
+	fetchQuery := `SELECT * FROM users WHERE id=$1`
+	var user appUser
+	err := db.Get(&user, fetchQuery, id)
+	if err != nil {
+		return appUser{}, err
 	}
+
+	return user, nil
+}
+
+type appUserDelegate struct {
+	db *sqlx.DB
+}
+
+func (d appUserDelegate) FetchUserByID(id string) (sesh.SessionUser, error) {
+	fmt.Println("FETCHING")
+
+	return fetchUserByID(d.db, id)
+}
+
+func (d appUserDelegate) UpdateUser(user sesh.SessionUser, currentSessionID string) error {
+	fmt.Println("SAVING NEW DEALIE", user, currentSessionID)
+
+	updateQuery := `UPDATE users SET current_session_id=$1 WHERE id=$2`
+
+	_, err := d.db.Exec(updateQuery, currentSessionID, user.SeshUserID())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func loginEndpoint(db *sqlx.DB, us sesh.UserSessions) func(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +115,7 @@ func loginEndpoint(db *sqlx.DB, us sesh.UserSessions) func(w http.ResponseWriter
 }
 
 func protectedEndpoint(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("PROTECTED")
+	fmt.Println("PROTECTED USER: ", sesh.UserFromContext(r.Context()).(appUser))
 }
 
 func logoutEndpoint(us sesh.UserSessions) func(w http.ResponseWriter, r *http.Request) {
@@ -130,10 +149,10 @@ func dbURLFromEnv() string {
 func setupMux(db *sqlx.DB) http.Handler {
 	mux := http.NewServeMux()
 
-	updateFn := updateUserDelegate(db)
+	delegate := appUserDelegate{db}
 
 	sessionManager := scs.New()
-	userSessions, err := sesh.NewUserSessions(sessionManager, updateFn)
+	userSessions, err := sesh.NewUserSessions(sessionManager, delegate)
 	if err != nil {
 		panic(err)
 	}
