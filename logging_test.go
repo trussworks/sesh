@@ -8,7 +8,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/trussworks/sesh/pkg/logger"
+	"github.com/trussworks/sesh/pkg/logrecorder"
 )
 
 type testUser struct {
@@ -51,7 +51,7 @@ func TestLogSessionCreated(t *testing.T) {
 
 	// setup a userSessions
 	sessionManager := scs.New()
-	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
+	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
 	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestLogSessionDestroyed(t *testing.T) {
 
 	// setup a userSessions
 	sessionManager := scs.New()
-	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
+	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
 	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +153,7 @@ func TestLogConcurrentSession(t *testing.T) {
 
 	// setup a userSessions
 	sessionManager := scs.New()
-	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
+	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
 	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +211,7 @@ func TestExpiredSession(t *testing.T) {
 	sessionManager := scs.New()
 	sessionManager.IdleTimeout = time.Second / 2
 
-	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
+	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
 	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +269,7 @@ func TestLoginLogout(t *testing.T) {
 
 	// setup a userSessions
 	sessionManager := scs.New()
-	logRecorder := logger.NewLogRecorder(logger.NewPrintLogger())
+	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
 	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)

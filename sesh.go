@@ -1,6 +1,6 @@
-// Package sesh is a session management library written in Go.
-// It uses a postgres table to track current sessions and their expiration,
-// and it logs all session lifecycle events.
+// Package sesh is an authenticated user session management library
+// It provides a ProtectedMiddleware to prevent un-authenticated users from accessing handlers,
+// it limits users to a single session, and it logs all session lifecycle events.
 package sesh
 
 import (
@@ -16,20 +16,9 @@ import (
 
 // SessionUser is an interface you can implement on your user that allows Sesh to limit you to a single concurrent session
 type SessionUser interface {
-	SeshUserID() string //-- fuuuuuu
+	SeshUserID() string
 	SeshCurrentSessionID() string
 }
-
-// UserSessions manage User Sessions. On top of scs for browser sessions
-type UserSessions struct {
-	scs          *scs.SessionManager
-	logger       EventLogger
-	errorHandler http.Handler
-	userDelegate UserDelegate
-}
-
-// UserUpdateDelegate is the function signature that will be called to update an implementors user with the current session ID
-type UserUpdateDelegate func(userID string, currentID string) error
 
 // UserDelegate is an implementor provided delegate for managing session IDs on your users
 type UserDelegate interface {
@@ -37,9 +26,17 @@ type UserDelegate interface {
 	UpdateUser(user SessionUser, currentSessionID string) error
 }
 
+// EventLogger is the interface that is used for logging all session lifecycle events. Supply your own with CustomLogger()
 type EventLogger interface {
 	LogSeshEvent(message string, metadata map[string]string)
 }
+
+// Errors for the error handler
+var (
+	ErrNoSession         = errors.New("this session is not authenticated")
+	ErrNotCurrentSession = errors.New("this session is not the current session")
+	ErrEmptySessionID    = errors.New("a user with an empty id cannot login")
+)
 
 // You should always make a custom type for context keys
 type seshContextKey string
@@ -69,17 +66,18 @@ const (
 	concurrentLoginMessage = "User logged in with a concurrent active session"
 )
 
-// Errors for the error handler
-var (
-	ErrNoSession         = errors.New("this session is not authenticated")
-	ErrNotCurrentSession = errors.New("this session is not the current session")
-	ErrEmptySessionID    = errors.New("a user with an empty id cannot login")
-)
-
 func hashSessionKey(sessionKey string) string {
 	hashed := sha512.Sum512([]byte(sessionKey))
 	hexEncoded := hex.EncodeToString(hashed[:])
 	return hexEncoded[:12]
+}
+
+// UserSessions manage User Sessions. On top of scs for browser sessions
+type UserSessions struct {
+	scs          *scs.SessionManager
+	logger       EventLogger
+	errorHandler http.Handler
+	userDelegate UserDelegate
 }
 
 // UserDidAuthenticate creates a new session and writes an HTTPOnly cookie to track that session
@@ -108,13 +106,12 @@ func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser)
 	}
 
 	// HACKY: We now store the sessionID in the session itself. SCS does not expose
-	// the sessionID except when `Commit` is called. We should make a PR to ammend that
+	// the sessionID except when `Commit` is called. We should make a PR to amend that
 	// but this will work for now.
 	s.scs.Put(ctx, seshIDKey, sessionID)
 
 	// Check to see if sessionID is set on the user, presently
 	if user.SeshCurrentSessionID() != "" {
-		fmt.Println("DID WE")
 
 		// Lookup the old session that wasn't logged out
 		_, exists, err := s.scs.Store.Find(user.SeshCurrentSessionID())
@@ -128,7 +125,6 @@ func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser)
 			s.logger.LogSeshEvent(concurrentLoginMessage, map[string]string{"session_id_hash": hashSessionKey(user.SeshCurrentSessionID())})
 
 			// We need to delete the concurrent session.
-			fmt.Println("DEleting that old sesssss", user.SeshCurrentSessionID())
 			err := s.scs.Store.Delete(user.SeshCurrentSessionID())
 			if err != nil {
 				// TODO, should we delete the new session?
@@ -160,11 +156,9 @@ func reqWithValue(r *http.Request, key interface{}, value interface{}) *http.Req
 // If the session is invalid it responds with an error and does not call any further handlers.
 func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Checking On Protecting")
 
 		// First, determine if a user session has been created by looking for the user ID.
 		userID := s.scs.GetString(r.Context(), userIDKey)
-		fmt.Println("USERID", userID)
 
 		if userID == "" {
 			// userID is set by UserDidLogin, it being unset means there is no user session active.
@@ -218,8 +212,6 @@ func ErrorFromContext(ctx context.Context) error {
 // UserDidLogout destroys the user session and removes the session cookie.
 // it returns errors
 func (s UserSessions) UserDidLogout(ctx context.Context) error {
-	// gotta call the thingamigger
-
 	// Renew the session token to prevent session fixation attacks on auth change
 	err := s.scs.RenewToken(ctx)
 	if err != nil {
@@ -228,8 +220,13 @@ func (s UserSessions) UserDidLogout(ctx context.Context) error {
 
 	// Remove the user id from the session to indicate that the session is unauthenticated.
 	s.scs.Remove(ctx, userIDKey)
+	currentSessionID := s.scs.PopString(ctx, seshIDKey)
 
-	// TODO: Probably go ahead and force the deletion to happen now, too. save it?
+	// Go ahead and commit our changes to the session
+	_, _, err = s.scs.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("Failed to write new user session to store: %w", err)
+	}
 
 	// Update the users's currentSessionID
 	user, ok := ctx.Value(userContextKey).(SessionUser)
@@ -237,14 +234,14 @@ func (s UserSessions) UserDidLogout(ctx context.Context) error {
 		return fmt.Errorf("the User was not in the context, it should have been put there by the protected middleware")
 	}
 
-	// Update the user to drop currentsessionid
+	// Update the user to have no current session id
 	err = s.userDelegate.UpdateUser(user, "")
 	if err != nil {
 		return fmt.Errorf("Failed to reset logged out user's session ID: %w", err)
 	}
 
 	// Log the deleted session.
-	s.logger.LogSeshEvent(sessionDeletedMessage, map[string]string{"session_id_hash": "some_hash_i_think"})
+	s.logger.LogSeshEvent(sessionDeletedMessage, map[string]string{"session_id_hash": hashSessionKey(currentSessionID)})
 
 	return nil
 }

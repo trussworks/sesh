@@ -11,6 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 )
 
+// TestCustomFailureHandler tests that a custom failure handler can be called
 func TestCustomFailureHandler(t *testing.T) {
 
 	var customCalled bool
@@ -65,6 +66,7 @@ func (d failUserFetchDelegate) UpdateUser(user SessionUser, currentSessionID str
 	return nil
 }
 
+// TestFetchFailure tests that if the user fetch fails we log a 500
 func TestFetchFailure(t *testing.T) {
 
 	protectedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +110,7 @@ func TestFetchFailure(t *testing.T) {
 
 }
 
+// TestCustomFetchFailure tests that if the user fetch fails the wrapped error is put in the context for the custom error handler.
 func TestCustomFetchFailure(t *testing.T) {
 
 	var customCalled bool
@@ -159,6 +162,40 @@ func TestCustomFetchFailure(t *testing.T) {
 	if passedErr.Error() != "Fetch Failure" {
 		t.Log("Didn't get the right error out: ", passedErr)
 		t.Fail()
+	}
+
+}
+
+// TestEmptyIDErr tests that if an implementor returns a user that has an empty string ID, we return an error.
+func TestEmptyIDErr(t *testing.T) {
+
+	var user testUser
+	delegate := testUserDelegate{
+		&user,
+	}
+
+	// setup a userSessions
+	sessionManager := scs.New()
+	userSessions, err := NewUserSessions(sessionManager, delegate)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create a user to authenticate
+	user = testUser{
+		ID:               "",
+		Username:         "Some Pig",
+		CurrentSessionID: "",
+	}
+
+	ctx, err := sessionManager.LoadNew(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = userSessions.UserDidAuthenticate(ctx, user)
+	if err != ErrEmptySessionID {
+		t.Fatal("didn't get the empty ID error.")
 	}
 
 }
