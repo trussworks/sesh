@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
+
 	"github.com/trussworks/sesh/pkg/logger"
 )
 

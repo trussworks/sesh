@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/alexedwards/scs/v2"
+	"github.com/alexedwards/scs/v2/memstore"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
@@ -147,11 +148,17 @@ func dbURLFromEnv() string {
 }
 
 func setupMux(db *sqlx.DB) http.Handler {
+	defaultStore := memstore.New()
+	return setupMuxWithStore(db, defaultStore)
+}
+
+func setupMuxWithStore(db *sqlx.DB, store scs.Store) http.Handler {
 	mux := http.NewServeMux()
 
 	delegate := appUserDelegate{db}
 
 	sessionManager := scs.New()
+	sessionManager.Store = store
 	userSessions, err := sesh.NewUserSessions(sessionManager, delegate)
 	if err != nil {
 		panic(err)

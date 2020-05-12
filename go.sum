@@ -1,4 +1,3 @@
-github.com/alexedwards/scs v1.4.1 h1:/5L5a07IlqApODcEfZyMsu8Smd1S7Q4nBjEyKxIRTp0=
 github.com/alexedwards/scs/v2 v2.3.0 h1:V8rtn2P5QGh8C9S7T/ikBo/AdA27vDoQJPbiAaOCmFg=
 github.com/alexedwards/scs/v2 v2.3.0/go.mod h1:ToaROZxyKukJKT/xLcVQAChi5k6+Pn1Gvmdl7h3RRj8=
 github.com/go-sql-driver/mysql v1.4.0 h1:7LxgVwFb2hIQtMm87NdgAVfXjnt4OePseqT1tKx+opk=

@@ -7,11 +7,11 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/trussworks/sesh/pkg/logger"
 )
 
 // SessionUser is an interface you can implement on your user that allows Sesh to limit you to a single concurrent session
@@ -24,6 +24,7 @@ type SessionUser interface {
 type UserSessions struct {
 	scs          *scs.SessionManager
 	logger       EventLogger
+	errorHandler http.Handler
 	userDelegate UserDelegate
 }
 
@@ -36,54 +37,43 @@ type UserDelegate interface {
 	UpdateUser(user SessionUser, currentSessionID string) error
 }
 
-// NewUserSessions returns a configured UserSessions
-func NewUserSessions(scs *scs.SessionManager, userDelegate UserDelegate, options ...Option) (UserSessions, error) {
-
-	sessions := UserSessions{
-		scs,
-		logger.NewPrintLogger(),
-		userDelegate,
-	}
-
-	for _, option := range options {
-		err := option(&sessions)
-		if err != nil {
-			return UserSessions{}, err
-		}
-	}
-
-	return sessions, nil
-}
-
 type EventLogger interface {
 	LogSeshEvent(message string, metadata map[string]string)
-}
-
-type Option func(*UserSessions) error
-
-func CustomLogger(logger EventLogger) Option {
-	return func(userSessions *UserSessions) error {
-		userSessions.logger = logger
-		return nil
-	}
 }
 
 // You should always make a custom type for context keys
 type seshContextKey string
 
-// userContextKey is the key for storing a user in the context
-const userContextKey seshContextKey = "user-context-key"
+const (
+	// userContextKey is the key for storing a user in the context
+	userContextKey seshContextKey = "user-context-key"
 
-// userIDKey is the key used internally by sesh to track the UserID for the user
-// that is authenticated in this session
-const userIDKey = "sesh-user-id"
+	// errorHandleKey is the context key for the error that the error handler can fetch
+	errorHandleKey seshContextKey = "error-handle-key"
+)
 
+const (
+	// userIDKey is the key used internally by sesh to track the UserID for the user
+	// that is authenticated in this session
+	userIDKey = "sesh-user-id"
+	// seshIDKey is used to store the session ID in the session because SCS does not expose it
+	seshIDKey = "sesh-sesh-id"
+)
+
+// Log messages for the logger
 const (
 	sessionCreatedMessage = "New User Session Created"
 	sessionDeletedMessage = "User Session Destroyed"
 
 	expiredLoginMessage    = "Previous session expired"
 	concurrentLoginMessage = "User logged in with a concurrent active session"
+)
+
+// Errors for the error handler
+var (
+	ErrNoSession         = errors.New("this session is not authenticated")
+	ErrNotCurrentSession = errors.New("this session is not the current session")
+	ErrEmptySessionID    = errors.New("a user with an empty id cannot login")
 )
 
 func hashSessionKey(sessionKey string) string {
@@ -97,6 +87,11 @@ func hashSessionKey(sessionKey string) string {
 func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser) error {
 	// got to do a bunch of stuff here.
 
+	userID := user.SeshUserID()
+	if userID == "" {
+		return ErrEmptySessionID
+	}
+
 	// Renew the session token to prevent session fixation attacks on auth change
 	err := s.scs.RenewToken(ctx)
 	if err != nil {
@@ -104,13 +99,18 @@ func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser)
 	}
 
 	// Put the user ID into the session to track which user authenticated here
-	s.scs.Put(ctx, userIDKey, user.SeshUserID())
+	s.scs.Put(ctx, userIDKey, userID)
 
 	// force SCS to commit the session now, this will ensure that the session has been created and give us the session ID.
 	sessionID, _, err := s.scs.Commit(ctx)
 	if err != nil {
 		return fmt.Errorf("Failed to write new user session to store: %w", err)
 	}
+
+	// HACKY: We now store the sessionID in the session itself. SCS does not expose
+	// the sessionID except when `Commit` is called. We should make a PR to ammend that
+	// but this will work for now.
+	s.scs.Put(ctx, seshIDKey, sessionID)
 
 	// Check to see if sessionID is set on the user, presently
 	if user.SeshCurrentSessionID() != "" {
@@ -128,6 +128,7 @@ func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser)
 			s.logger.LogSeshEvent(concurrentLoginMessage, map[string]string{"session_id_hash": hashSessionKey(user.SeshCurrentSessionID())})
 
 			// We need to delete the concurrent session.
+			fmt.Println("DEleting that old sesssss", user.SeshCurrentSessionID())
 			err := s.scs.Store.Delete(user.SeshCurrentSessionID())
 			if err != nil {
 				// TODO, should we delete the new session?
@@ -149,6 +150,11 @@ func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser)
 	return nil
 }
 
+func reqWithValue(r *http.Request, key interface{}, value interface{}) *http.Request {
+	newCtx := context.WithValue(r.Context(), key, value)
+	return r.WithContext(newCtx)
+}
+
 // ProtectedMiddleware reads the session cookie and verifies that the request is being made by someone with a valid session
 // It then stores the current session in the context, which can be retrieved with SessionFromContext(ctx)
 // If the session is invalid it responds with an error and does not call any further handlers.
@@ -158,15 +164,12 @@ func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
 
 		// First, determine if a user session has been created by looking for the user ID.
 		userID := s.scs.GetString(r.Context(), userIDKey)
+		fmt.Println("USERID", userID)
 
 		if userID == "" {
 			// userID is set by UserDidLogin, it being unset means there is no user session active.
-			// In this case, an unauthenticated request has been made.
-
-			// TODO: log it?
-			// TODO: call error handler.
-			fmt.Println("UNAUTHORIZED REQUEST MADE")
-			http.Error(w, "UNAUTHORIZED", http.StatusUnauthorized)
+			errReq := reqWithValue(r, errorHandleKey, ErrNoSession)
+			s.errorHandler.ServeHTTP(w, errReq)
 			return
 		}
 
@@ -177,25 +180,21 @@ func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
 		// valid when it's explicitly not anymore. This is why we check on every load.
 		user, err := s.userDelegate.FetchUserByID(userID)
 		if err != nil {
-			// TODO: log it?
-			// TODO: call error handler.
-			fmt.Println("Couldn't find user", err)
-			http.Error(w, "SERVER_ERROR", http.StatusInternalServerError)
+			// We pass the implementor returned error into the context for the handler
+			errReq := reqWithValue(r, errorHandleKey, err)
+			s.errorHandler.ServeHTTP(w, errReq)
 			return
 		}
 
-		// // next, check that the session id is current for the use
-		// // BLERG. Gotta get the current token somehow.
-		// if user.SeshCurrentSessionID() != "FUUUUU" {
-		// 	// TODO: log it?
-		// 	// TODO: call error handler.
-		// 	fmt.Println("OLD SESSION MADE REQUEST")
-		// 	http.Error(w, "UNAUTHORIZED", http.StatusUnauthorized)
-		// 	return
-		// }
+		// next, check that the session id is current for the use
+		thisSessionID := s.scs.GetString(r.Context(), seshIDKey)
+		if user.SeshCurrentSessionID() != thisSessionID {
+			errReq := reqWithValue(r, errorHandleKey, ErrNotCurrentSession)
+			s.errorHandler.ServeHTTP(w, errReq)
+			return
+		}
 
-		userContext := context.WithValue(r.Context(), userContextKey, user)
-		userReq := r.WithContext(userContext)
+		userReq := reqWithValue(r, userContextKey, user)
 
 		next.ServeHTTP(w, userReq)
 	})
@@ -206,6 +205,14 @@ func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
 // it to your native user type.
 func UserFromContext(ctx context.Context) SessionUser {
 	return ctx.Value(userContextKey).(SessionUser)
+}
+
+// ErrorFromContext returns the error that caused the error handler to be called by the protected middleware.
+// It will either be one of the predefined sesh errors: ErrNoSession or ErrNotCurrentSession OR it will be
+// an error that wraps whatever error was returned from the FetchUserByID delegate method.
+// If this function is called outside of an error handler, it will likely panic because no error has been set.
+func ErrorFromContext(ctx context.Context) error {
+	return ctx.Value(errorHandleKey).(error)
 }
 
 // UserDidLogout destroys the user session and removes the session cookie.
