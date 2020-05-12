@@ -72,8 +72,8 @@ func hashSessionKey(sessionKey string) string {
 	return hexEncoded[:12]
 }
 
-// UserSessions manage User Sessions. On top of scs for browser sessions
-type UserSessions struct {
+// UserSessionManager manage User Sessions. On top of scs for browser sessions
+type UserSessionManager struct {
 	scs          *scs.SessionManager
 	logger       EventLogger
 	errorHandler http.Handler
@@ -82,7 +82,7 @@ type UserSessions struct {
 
 // UserDidAuthenticate creates a new session and writes an HTTPOnly cookie to track that session
 // it returns errors
-func (s UserSessions) UserDidAuthenticate(ctx context.Context, user SessionUser) error {
+func (s UserSessionManager) UserDidAuthenticate(ctx context.Context, user SessionUser) error {
 	// got to do a bunch of stuff here.
 
 	userID := user.SeshUserID()
@@ -154,7 +154,7 @@ func reqWithValue(r *http.Request, key interface{}, value interface{}) *http.Req
 // ProtectedMiddleware reads the session cookie and verifies that the request is being made by someone with a valid session
 // It then stores the current session in the context, which can be retrieved with SessionFromContext(ctx)
 // If the session is invalid it responds with an error and does not call any further handlers.
-func (s UserSessions) ProtectedMiddleware(next http.Handler) http.Handler {
+func (s UserSessionManager) ProtectedMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// First, determine if a user session has been created by looking for the user ID.
@@ -211,7 +211,7 @@ func ErrorFromContext(ctx context.Context) error {
 
 // UserDidLogout destroys the user session and removes the session cookie.
 // it returns errors
-func (s UserSessions) UserDidLogout(ctx context.Context) error {
+func (s UserSessionManager) UserDidLogout(ctx context.Context) error {
 	// Renew the session token to prevent session fixation attacks on auth change
 	err := s.scs.RenewToken(ctx)
 	if err != nil {

@@ -49,10 +49,10 @@ func TestLogSessionCreated(t *testing.T) {
 		&user,
 	}
 
-	// setup a userSessions
+	// setup a userSeshManager
 	sessionManager := scs.New()
 	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
-	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
+	userSeshManager, err := NewUserSessionManager(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestLogSessionCreated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidAuthenticate(ctx, user)
+	err = userSeshManager.UserDidAuthenticate(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,10 +97,10 @@ func TestLogSessionDestroyed(t *testing.T) {
 		&user,
 	}
 
-	// setup a userSessions
+	// setup a userSeshManager
 	sessionManager := scs.New()
 	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
-	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
+	userSeshManager, err := NewUserSessionManager(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestLogSessionDestroyed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidAuthenticate(ctx, user)
+	err = userSeshManager.UserDidAuthenticate(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestLogSessionDestroyed(t *testing.T) {
 	// UserDidLogout depends on the middleware having run.
 	userContext := context.WithValue(ctx, userContextKey, user)
 
-	err = userSessions.UserDidLogout(userContext)
+	err = userSeshManager.UserDidLogout(userContext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,10 +151,10 @@ func TestLogConcurrentSession(t *testing.T) {
 	var user testUser
 	delegate := testUserDelegate{&user}
 
-	// setup a userSessions
+	// setup a userSeshManager
 	sessionManager := scs.New()
 	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
-	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
+	userSeshManager, err := NewUserSessionManager(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,12 +176,12 @@ func TestLogConcurrentSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidAuthenticate(firstCtx, user)
+	err = userSeshManager.UserDidAuthenticate(firstCtx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidAuthenticate(secondCtx, user)
+	err = userSeshManager.UserDidAuthenticate(secondCtx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,12 +207,12 @@ func TestExpiredSession(t *testing.T) {
 	var user testUser
 	delegate := testUserDelegate{&user}
 
-	// setup a userSessions
+	// setup a userSeshManager
 	sessionManager := scs.New()
 	sessionManager.IdleTimeout = time.Second / 2
 
 	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
-	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
+	userSeshManager, err := NewUserSessionManager(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,14 +234,14 @@ func TestExpiredSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidAuthenticate(firstCtx, user)
+	err = userSeshManager.UserDidAuthenticate(firstCtx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(1 * time.Second)
 
-	err = userSessions.UserDidAuthenticate(secondCtx, user)
+	err = userSeshManager.UserDidAuthenticate(secondCtx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,10 +267,10 @@ func TestLoginLogout(t *testing.T) {
 	var user testUser
 	delegate := testUserDelegate{&user}
 
-	// setup a userSessions
+	// setup a userSeshManager
 	sessionManager := scs.New()
 	logRecorder := logrecorder.NewLogRecorder(newDefaultLogger())
-	userSessions, err := NewUserSessions(sessionManager, delegate, CustomLogger(&logRecorder))
+	userSeshManager, err := NewUserSessionManager(sessionManager, delegate, CustomLogger(&logRecorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestLoginLogout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidAuthenticate(firstCtx, user)
+	err = userSeshManager.UserDidAuthenticate(firstCtx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,12 +300,12 @@ func TestLoginLogout(t *testing.T) {
 	// Logout relies on the user being in the context.
 	firstUserContext := context.WithValue(firstCtx, userContextKey, user)
 
-	err = userSessions.UserDidLogout(firstUserContext)
+	err = userSeshManager.UserDidLogout(firstUserContext)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidAuthenticate(secondCtx, user)
+	err = userSeshManager.UserDidAuthenticate(secondCtx, user)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,7 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/alexedwards/scs/v2/memstore"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // For sqlx to work with postgres we must import the driver
 
 	"github.com/trussworks/sesh"
 )
@@ -78,18 +78,18 @@ func (d appUserDelegate) UpdateUser(user sesh.SessionUser, currentSessionID stri
 	return nil
 }
 
-func loginEndpoint(db *sqlx.DB, us sesh.UserSessions) func(w http.ResponseWriter, r *http.Request) {
+func loginEndpoint(db *sqlx.DB, us sesh.UserSessionManager) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("LOGINGIN")
 
-		usernameb, err := ioutil.ReadAll(r.Body)
+		usernameBytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "Bad Body", 400)
 			return
 		}
 
-		username := string(usernameb)
+		username := string(usernameBytes)
 
 		// load the user by ID.
 		user, err := fetchUserByUsername(db, username)
@@ -119,7 +119,7 @@ func protectedEndpoint(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("PROTECTED USER: ", sesh.UserFromContext(r.Context()).(appUser))
 }
 
-func logoutEndpoint(us sesh.UserSessions) func(w http.ResponseWriter, r *http.Request) {
+func logoutEndpoint(us sesh.UserSessionManager) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Logging OUT")
 
@@ -159,16 +159,16 @@ func setupMuxWithStore(db *sqlx.DB, store scs.Store) http.Handler {
 
 	sessionManager := scs.New()
 	sessionManager.Store = store
-	userSessions, err := sesh.NewUserSessions(sessionManager, delegate)
+	userSeshManager, err := sesh.NewUserSessionManager(sessionManager, delegate)
 	if err != nil {
 		panic(err)
 	}
 
-	protectedMiddleware := userSessions.ProtectedMiddleware
+	protectedMiddleware := userSeshManager.ProtectedMiddleware
 
-	mux.HandleFunc("/login", loginEndpoint(db, userSessions))
+	mux.HandleFunc("/login", loginEndpoint(db, userSeshManager))
 	mux.Handle("/protected", protectedMiddleware(http.HandlerFunc(protectedEndpoint)))
-	mux.Handle("/logout", protectedMiddleware(http.HandlerFunc(logoutEndpoint(userSessions))))
+	mux.Handle("/logout", protectedMiddleware(http.HandlerFunc(logoutEndpoint(userSeshManager))))
 
 	return sessionManager.LoadAndSave(mux)
 }

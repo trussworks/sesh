@@ -6,10 +6,10 @@ import (
 	"github.com/alexedwards/scs/v2"
 )
 
-// NewUserSessions returns a configured UserSessions
-func NewUserSessions(scs *scs.SessionManager, userDelegate UserDelegate, options ...Option) (UserSessions, error) {
+// NewUserSessionManager returns a configured UserSessionManager
+func NewUserSessionManager(scs *scs.SessionManager, userDelegate UserDelegate, options ...Option) (UserSessionManager, error) {
 
-	sessions := UserSessions{
+	sessions := UserSessionManager{
 		scs,
 		newDefaultLogger(),
 		newDefaultErrorHandler(),
@@ -19,22 +19,22 @@ func NewUserSessions(scs *scs.SessionManager, userDelegate UserDelegate, options
 	for _, option := range options {
 		err := option(&sessions)
 		if err != nil {
-			return UserSessions{}, err
+			return UserSessionManager{}, err
 		}
 	}
 
 	return sessions, nil
 }
 
-// Option is an option for constructing a UserSessionManager, they can be passed in to NewUserSessions
+// Option is an option for constructing a UserSessionManager, they can be passed in to NewUserSessionManager
 // The available options are defined below.
-type Option func(*UserSessions) error
+type Option func(*UserSessionManager) error
 
 // CustomLogger supplies a custom logger for logging session lifecycle events.
 // It must conform to EventLogger
 func CustomLogger(logger EventLogger) Option {
-	return func(userSessions *UserSessions) error {
-		userSessions.logger = logger
+	return func(userSeshManager *UserSessionManager) error {
+		userSeshManager.logger = logger
 		return nil
 	}
 }
@@ -42,8 +42,8 @@ func CustomLogger(logger EventLogger) Option {
 // CustomErrorHandler supplies a custom http.Handler for responding to errors in the ProtectedMiddleware
 // Use ErrorFromContext(ctx) to get the error that caused this handler to be called.
 func CustomErrorHandler(errorHandler http.Handler) Option {
-	return func(userSessions *UserSessions) error {
-		userSessions.errorHandler = errorHandler
+	return func(userSeshManager *UserSessionManager) error {
+		userSeshManager.errorHandler = errorHandler
 		return nil
 	}
 }

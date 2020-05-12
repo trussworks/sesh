@@ -27,7 +27,7 @@ func TestCustomFailureHandler(t *testing.T) {
 	})
 
 	sessionManager := scs.New()
-	userSessions, err := NewUserSessions(sessionManager, nil, CustomErrorHandler(failureHandler))
+	userSeshManager, err := NewUserSessionManager(sessionManager, nil, CustomErrorHandler(failureHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestCustomFailureHandler(t *testing.T) {
 	}
 	r = r.WithContext(scsContext)
 
-	wrappedHandler := userSessions.ProtectedMiddleware(protectedHandler)
+	wrappedHandler := userSeshManager.ProtectedMiddleware(protectedHandler)
 
 	wrappedHandler.ServeHTTP(w, r)
 
@@ -74,7 +74,7 @@ func TestFetchFailure(t *testing.T) {
 	})
 
 	sessionManager := scs.New()
-	userSessions, err := NewUserSessions(sessionManager, failUserFetchDelegate{})
+	userSeshManager, err := NewUserSessionManager(sessionManager, failUserFetchDelegate{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestFetchFailure(t *testing.T) {
 	}
 
 	// log a user in
-	err = userSessions.UserDidAuthenticate(scsContext, testUser{
+	err = userSeshManager.UserDidAuthenticate(scsContext, testUser{
 		ID: "one",
 	})
 	if err != nil {
@@ -98,7 +98,7 @@ func TestFetchFailure(t *testing.T) {
 
 	r = r.WithContext(scsContext)
 
-	wrappedHandler := userSessions.ProtectedMiddleware(protectedHandler)
+	wrappedHandler := userSeshManager.ProtectedMiddleware(protectedHandler)
 
 	wrappedHandler.ServeHTTP(w, r)
 
@@ -126,7 +126,7 @@ func TestCustomFetchFailure(t *testing.T) {
 	})
 
 	sessionManager := scs.New()
-	userSessions, err := NewUserSessions(sessionManager, failUserFetchDelegate{}, CustomErrorHandler(failureHandler))
+	userSeshManager, err := NewUserSessionManager(sessionManager, failUserFetchDelegate{}, CustomErrorHandler(failureHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestCustomFetchFailure(t *testing.T) {
 	}
 
 	// log a user in
-	err = userSessions.UserDidAuthenticate(scsContext, testUser{
+	err = userSeshManager.UserDidAuthenticate(scsContext, testUser{
 		ID: "one",
 	})
 	if err != nil {
@@ -150,7 +150,7 @@ func TestCustomFetchFailure(t *testing.T) {
 
 	r = r.WithContext(scsContext)
 
-	wrappedHandler := userSessions.ProtectedMiddleware(protectedHandler)
+	wrappedHandler := userSeshManager.ProtectedMiddleware(protectedHandler)
 
 	wrappedHandler.ServeHTTP(w, r)
 
@@ -174,9 +174,9 @@ func TestEmptyIDErr(t *testing.T) {
 		&user,
 	}
 
-	// setup a userSessions
+	// setup a userSeshManager
 	sessionManager := scs.New()
-	userSessions, err := NewUserSessions(sessionManager, delegate)
+	userSeshManager, err := NewUserSessionManager(sessionManager, delegate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestEmptyIDErr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = userSessions.UserDidAuthenticate(ctx, user)
+	err = userSeshManager.UserDidAuthenticate(ctx, user)
 	if err != ErrEmptySessionID {
 		t.Fatal("didn't get the empty ID error.")
 	}
