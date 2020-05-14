@@ -17,6 +17,7 @@ create_test_db:
 
 load_db_schema:
 	psql $(db_url) -f migrations/create_sessions_table.sql
+	psql $(db_url) -f migrations/create_user_tablef.sql
 
  reset_test_db:
 	make drop_test_db || true

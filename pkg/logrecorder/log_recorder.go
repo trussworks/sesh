@@ -1,43 +1,40 @@
-package mock
+package logrecorder
 
 import (
 	"fmt"
-
-	"github.com/trussworks/sesh/pkg/domain"
 )
-
-// Log Recorder
 
 // LogLine is a mock log line
 type LogLine struct {
 	Level   string
 	Message string
-	Fields  domain.LogFields
+	Fields  map[string]string
 }
 
-// LogRecorder is a mock log recorder
+// EventLogger should match the EventLogger defined in sesh
+type EventLogger interface {
+	LogSeshEvent(message string, metadata map[string]string)
+}
+
+// LogRecorder is a log recorder for testing
 type LogRecorder struct {
-	domain.LogService
-	lines   []LogLine
-	globals domain.LogFields
+	EventLogger
+	lines []LogLine
 }
 
-func NewLogRecorder(service domain.LogService) LogRecorder {
+// NewLogRecorder constructs a LogRecorder
+func NewLogRecorder(wrappedLogger EventLogger) LogRecorder {
 	return LogRecorder{
-		LogService: service,
+		EventLogger: wrappedLogger,
 	}
 }
 
 // RecordLine records and returns a new LogLine with its level, message, and fields.
-func (r *LogRecorder) RecordLine(level string, message string, fields domain.LogFields) LogLine {
+func (r *LogRecorder) RecordLine(level string, message string, fields map[string]string) LogLine {
 	newLine := LogLine{
 		Level:   level,
 		Message: message,
-		Fields:  domain.LogFields{},
-	}
-
-	for k, v := range r.globals {
-		newLine.Fields[k] = v
+		Fields:  make(map[string]string),
 	}
 
 	for k, v := range fields {
@@ -49,18 +46,9 @@ func (r *LogRecorder) RecordLine(level string, message string, fields domain.Log
 	return newLine
 }
 
-// Info records new LogLine as INFO level
-func (r *LogRecorder) Info(message string, fields domain.LogFields) {
-	line := r.RecordLine("INFO", message, fields)
-	r.LogService.Info(line.Message, line.Fields)
-}
-
-// AddField adds new fields to LogRecorder's globals field
-func (r *LogRecorder) AddField(name string, value string) {
-	if r.globals == nil {
-		r.globals = domain.LogFields{}
-	}
-	r.globals[name] = value
+func (r *LogRecorder) LogSeshEvent(message string, fields map[string]string) {
+	r.RecordLine("N/A", message, fields)
+	r.EventLogger.LogSeshEvent(message, fields)
 }
 
 // GetOnlyMatchingMessage returns singular LogLine that matches message or errors

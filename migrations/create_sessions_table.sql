@@ -1,5 +1,7 @@
-CREATE TABLE sessions(
-    session_key     text PRIMARY KEY,
-    account_id      text UNIQUE NOT NULL,
-    expiration_date timestamp NOT NULL
+CREATE TABLE sessions (
+	token TEXT PRIMARY KEY,
+	data BYTEA NOT NULL,
+	expiry TIMESTAMPTZ NOT NULL
 );
+
+CREATE INDEX sessions_expiry_idx ON sessions (expiry);
