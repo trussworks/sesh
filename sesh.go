@@ -162,6 +162,7 @@ func (s UserSessionManager) ProtectedMiddleware(next http.Handler) http.Handler 
 
 		if userID == "" {
 			// userID is set by UserDidLogin, it being unset means there is no user session active.
+			// TODO: log with the logger this invalid access?
 			errReq := reqWithValue(r, errorHandleKey, ErrNoSession)
 			s.errorHandler.ServeHTTP(w, errReq)
 			return
@@ -183,6 +184,7 @@ func (s UserSessionManager) ProtectedMiddleware(next http.Handler) http.Handler 
 		// next, check that the session id is current for the use
 		thisSessionID := s.scs.GetString(r.Context(), seshIDKey)
 		if user.SeshCurrentSessionID() != thisSessionID {
+			// TODO: should we log with the event logger this invalid request?
 			errReq := reqWithValue(r, errorHandleKey, ErrNotCurrentSession)
 			s.errorHandler.ServeHTTP(w, errReq)
 			return
